@@ -6,6 +6,7 @@ import (
 	"go-api/configs"
 	"go-api/pkg/res"
 	"net/http"
+	"regexp"
 )
 
 type AuthHandlerDeps struct {
@@ -29,8 +30,13 @@ func (handler *AuthHandler) login(w http.ResponseWriter, req *http.Request) {
 		res.JsonResponse(w, map[string]string{"error": "Invalid request body: " + err.Error()}, http.StatusBadRequest)
 		return
 	}
+	emailRegex, _ := regexp.Compile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 	if payload.Email == "" {
 		res.JsonResponse(w, map[string]string{"error": "Email is required"}, http.StatusBadRequest)
+		return
+	}
+	if !emailRegex.MatchString(payload.Email) {
+		res.JsonResponse(w, map[string]string{"error": "Invalid email format"}, http.StatusBadRequest)
 		return
 	}
 	if payload.Password == "" {
