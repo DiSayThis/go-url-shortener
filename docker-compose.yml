@@ -4,9 +4,8 @@ services:
     container_name: postgres_go
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123789456
-      PGDATA: /data/postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./postgres-data:/data/postgres
+      - "${POSTGRES_DATA_PATH}:/var/lib/postgresql"
     ports:
       - "5400:5432"
