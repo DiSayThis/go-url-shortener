@@ -14,8 +14,7 @@ type Config struct {
 }
 
 type DbConfig struct {
-	Dsn      string
-	Dbstring string
+	DbUrl string
 }
 
 type AuthConfig struct {
@@ -39,8 +38,7 @@ func LoadConfig() *Config {
 	}
 	return &Config{
 		Db: DbConfig{
-			Dsn:      os.Getenv("DSN"),
-			Dbstring: os.Getenv("GOOSE_DBSTRING"),
+			DbUrl: os.Getenv("DATABASE_URL"),
 		},
 		Http: HttpConfig{
 			Port: port,

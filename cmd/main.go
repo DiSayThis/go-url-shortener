@@ -2,40 +2,93 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"go-api/configs"
 	"go-api/internal/auth"
-	"go-api/pkg/dbgorm"
-	"go-api/pkg/dbsqlc"
-	"net/http"
+	"go-api/internal/link"
+	"go-api/pkg/db"
 )
 
 func main() {
-	conf := configs.LoadConfig()
-	addr := conf.Http.Host + ":" + conf.Http.Port
-
-	_, err := dbgorm.NewDb(conf)
-	if err != nil {
-		fmt.Print("connect to database: %w", err)
-	}
-
-	pool, err := dbsqlc.NewDbPool(
+	ctx, stop := signal.NotifyContext(
 		context.Background(),
-		conf.Db.Dbstring,
+		os.Interrupt,
+		syscall.SIGTERM,
 	)
+	defer stop()
+
+	if err := run(ctx); err != nil {
+		slog.Error("application stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
+	conf := configs.LoadConfig()
+
+	pool, err := db.NewDbPool(ctx, conf.Db.DbUrl)
 	if err != nil {
-		fmt.Print("connect to database: %w", err)
+		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
 
 	router := http.NewServeMux()
-	auth.NewAuthHandler(router, auth.AuthHandlerDeps{Config: conf})
+	//Handle routes
+	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
+		Config: conf,
+	})
+	link.NewLinkHandler(router, link.LinkHandlerDeps{
+		Config: conf,
+	})
 
-	server := http.Server{
-		Addr:    addr,
-		Handler: router,
+	server := &http.Server{
+		Addr:              net.JoinHostPort(conf.Http.Host, conf.Http.Port),
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
-	fmt.Println("Server start:", addr)
-	server.ListenAndServe()
+	serverError := make(chan error, 1)
+
+	go func() {
+		slog.Info("starting HTTP server", "address", server.Addr)
+		serverError <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverError:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("run HTTP server: %w", err)
+		}
+		return nil
+
+	case <-ctx.Done():
+		slog.Info("shutting down application")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown HTTP server: %w", err)
+	}
+
+	err = <-serverError
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("stop HTTP server: %w", err)
+	}
+
+	return nil
 }

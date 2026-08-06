@@ -1,4 +1,4 @@
-package dbsqlc
+package db
 
 import (
 	"context"
@@ -16,12 +16,13 @@ func NewDbPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 
 	config.MaxConns = 10
 	config.MinConns = 1
-	config.MaxConnLifetime = 30 * time.Minute
+	config.MinIdleConns = 1
+	config.MaxConnLifetime = time.Hour
 	config.MaxConnIdleTime = 5 * time.Minute
 	config.HealthCheckPeriod = time.Minute
 	config.ConnConfig.ConnectTimeout = 5 * time.Second
 
-	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	pool, err := pgxpool.NewWithConfig(connectCtx, config)
