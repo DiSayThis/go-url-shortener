@@ -3,7 +3,6 @@ package response
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 type ErrorDetails struct {
@@ -15,14 +14,14 @@ type ErrorResponse struct {
 	Error ErrorDetails `json:"error"`
 }
 
-func JsonResponse(w http.ResponseWriter, data interface{}, status int) {
+func JsonResponse(w http.ResponseWriter, data any, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
-func JsonError(w http.ResponseWriter, status int, message string) {
-	JsonResponse(w, ErrorResponse{Error: ErrorDetails{Code: strconv.Itoa(status), Message: message}},
+func JsonError(w http.ResponseWriter, status int, code string, message string) {
+	JsonResponse(w, ErrorResponse{Error: ErrorDetails{Code: code, Message: message}},
 		status,
 	)
 }

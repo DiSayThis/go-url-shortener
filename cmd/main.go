@@ -17,9 +17,13 @@ import (
 	"go-api/internal/database"
 	"go-api/internal/link"
 	"go-api/pkg/db"
+	"go-api/pkg/logger"
 )
 
 func main() {
+	logger := logger.NewLogger("local")
+	slog.SetDefault(logger)
+
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -53,7 +57,10 @@ func run(ctx context.Context) error {
 
 	//Handle routes
 	auth.NewAuthHandler(router, auth.AuthHandlerDeps{Config: conf})
-	link.NewLinkHandler(router, link.LinkHandlerDeps{Service: linkService})
+	link.NewLinkHandler(router, link.LinkHandlerDeps{
+		Service: linkService,
+		Logger:  slog.Default(),
+	})
 
 	server := &http.Server{
 		Addr:              net.JoinHostPort(conf.Http.Host, conf.Http.Port),
