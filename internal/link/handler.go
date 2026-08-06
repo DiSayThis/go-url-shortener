@@ -1,34 +1,64 @@
 package link
 
 import (
-	"go-api/configs"
+	"context"
+	"fmt"
+	"go-api/internal/database"
+	"go-api/pkg/request"
+	"go-api/pkg/response"
 	"net/http"
 )
 
 type LinkHandlerDeps struct {
-	*configs.Config
+	Service LinkService
 }
-type LinkHandler struct {
-	*configs.Config
+type LinkService interface {
+	Create(
+		ctx context.Context,
+		rawURL string,
+	) (*database.Link, error)
+}
+
+type Handler struct {
+	Service LinkService
 }
 
 func NewLinkHandler(router *http.ServeMux, deps LinkHandlerDeps) {
-	handler := &LinkHandler{Config: deps.Config}
+	handler := &Handler{Service: deps.Service}
 
-	router.HandleFunc("POST /link/create", handler.create)
+	router.HandleFunc("POST /link", handler.create)
 	router.HandleFunc("PATCH /link/{id}", handler.update)
 	router.HandleFunc("DELETE /link/{id}", handler.delete)
-	router.HandleFunc("GET /{alias}", handler.get)
+	router.HandleFunc("GET /{hash}", handler.get)
 }
 
-func (handler *LinkHandler) create(w http.ResponseWriter, req *http.Request) {
+type CreateLinkRequest struct {
+	Url string `json:"url" validate:"required,url"`
 }
 
-func (handler *LinkHandler) update(w http.ResponseWriter, req *http.Request) {
+func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
+	payload, err := request.HandleBody[CreateLinkRequest](w, req)
+	if err != nil {
+		return
+	}
+	result, err := handler.Service.Create(
+		req.Context(),
+		payload.Url,
+	)
+	if err != nil {
+		response.JsonResponse(w, map[string]string{"error": "Failed to create link: " + err.Error()}, http.StatusInternalServerError)
+		return
+	}
+	response.JsonResponse(w, result, http.StatusCreated)
 }
 
-func (handler *LinkHandler) delete(w http.ResponseWriter, req *http.Request) {
+func (handler *Handler) update(w http.ResponseWriter, req *http.Request) {
 }
 
-func (handler *LinkHandler) get(w http.ResponseWriter, req *http.Request) {
+func (handler *Handler) delete(w http.ResponseWriter, req *http.Request) {
+	id := req.PathValue("id")
+	fmt.Println(id)
+}
+
+func (handler *Handler) get(w http.ResponseWriter, req *http.Request) {
 }

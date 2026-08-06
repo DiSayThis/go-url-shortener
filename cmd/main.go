@@ -14,6 +14,7 @@ import (
 
 	"go-api/configs"
 	"go-api/internal/auth"
+	"go-api/internal/database"
 	"go-api/internal/link"
 	"go-api/pkg/db"
 )
@@ -40,15 +41,19 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
+	queries := database.New(pool)
 
 	router := http.NewServeMux()
+
+	//Repositories
+	linkRepository := link.NewLinkRepository(queries)
+
+	//Services
+	linkService := link.NewLinkService(linkRepository)
+
 	//Handle routes
-	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
-		Config: conf,
-	})
-	link.NewLinkHandler(router, link.LinkHandlerDeps{
-		Config: conf,
-	})
+	auth.NewAuthHandler(router, auth.AuthHandlerDeps{Config: conf})
+	link.NewLinkHandler(router, link.LinkHandlerDeps{Service: linkService})
 
 	server := &http.Server{
 		Addr:              net.JoinHostPort(conf.Http.Host, conf.Http.Port),

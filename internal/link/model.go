@@ -1,19 +1,12 @@
 package link
 
 import (
+	"go-api/internal/database"
 	"math/rand"
-
-	"gorm.io/gorm"
 )
 
-type Link struct {
-	gorm.Model
-	Url  string `json:"url" gorm:"type:varchar(255);not null"`
-	Hash string `json:"hash" gorm:"type:varchar(255);not null;uniqueIndex"`
-}
-
-func NewLink(url string) *Link {
-	return &Link{
+func NewLink(url string) *database.Link {
+	return &database.Link{
 		Url:  url,
 		Hash: RandStringRunes(10),
 	}
