@@ -2,16 +2,19 @@ package link
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"go-api/internal/database"
 	"strings"
 )
 
-type LinkRepository interface {
+type LinkService interface {
 	Create(
 		ctx context.Context,
-		link *database.Link,
+		rawURL string,
+	) (*database.Link, error)
+	GetByHash(
+		ctx context.Context,
+		hash string,
 	) (*database.Link, error)
 }
 
@@ -27,14 +30,11 @@ func NewLinkService(
 	}
 }
 
-func (service *Service) Create(
-	ctx context.Context,
-	rawURL string,
-) (*database.Link, error) {
+func (service *Service) Create(ctx context.Context, rawURL string) (*database.Link, error) {
 	rawURL = strings.TrimSpace(rawURL)
 
 	if rawURL == "" {
-		return nil, errors.New("URL is required")
+		return nil, ErrInvalidURL
 	}
 
 	link := NewLink(rawURL)
@@ -45,4 +45,12 @@ func (service *Service) Create(
 	}
 
 	return createdLink, nil
+}
+
+func (service *Service) GetByHash(ctx context.Context, hash string) (*database.Link, error) {
+	link, err := service.repository.GetByHash(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("get link by hash: %w", err)
+	}
+	return link, nil
 }

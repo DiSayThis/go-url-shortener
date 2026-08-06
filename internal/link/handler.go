@@ -1,9 +1,7 @@
 package link
 
 import (
-	"context"
 	"fmt"
-	"go-api/internal/database"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
 	"net/http"
@@ -11,12 +9,6 @@ import (
 
 type LinkHandlerDeps struct {
 	Service LinkService
-}
-type LinkService interface {
-	Create(
-		ctx context.Context,
-		rawURL string,
-	) (*database.Link, error)
 }
 
 type Handler struct {
@@ -29,7 +21,7 @@ func NewLinkHandler(router *http.ServeMux, deps LinkHandlerDeps) {
 	router.HandleFunc("POST /link", handler.create)
 	router.HandleFunc("PATCH /link/{id}", handler.update)
 	router.HandleFunc("DELETE /link/{id}", handler.delete)
-	router.HandleFunc("GET /{hash}", handler.get)
+	router.HandleFunc("GET /{hash}", handler.GoTo)
 }
 
 type CreateLinkRequest struct {
@@ -46,7 +38,7 @@ func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
 		payload.Url,
 	)
 	if err != nil {
-		response.JsonResponse(w, map[string]string{"error": "Failed to create link: " + err.Error()}, http.StatusInternalServerError)
+		response.JsonError(w, http.StatusInternalServerError, "Failed to create link: "+err.Error())
 		return
 	}
 	response.JsonResponse(w, result, http.StatusCreated)
@@ -60,5 +52,12 @@ func (handler *Handler) delete(w http.ResponseWriter, req *http.Request) {
 	fmt.Println(id)
 }
 
-func (handler *Handler) get(w http.ResponseWriter, req *http.Request) {
+func (handler *Handler) GoTo(w http.ResponseWriter, req *http.Request) {
+	hash := req.PathValue("hash")
+	link, err := handler.Service.GetByHash(req.Context(), hash)
+	if err != nil {
+		response.JsonError(w, http.StatusNotFound, "Link not found")
+		return
+	}
+	http.Redirect(w, req, link.Url, http.StatusTemporaryRedirect)
 }
