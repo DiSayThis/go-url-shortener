@@ -7,17 +7,12 @@ import (
 	"go-api/internal/database"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type LinkRepository interface {
-	Create(
-		ctx context.Context,
-		link *database.Link,
-	) (*database.Link, error)
-	GetByHash(
-		ctx context.Context,
-		hash string,
-	) (*database.Link, error)
+	Create(ctx context.Context, link *database.Link) (*database.Link, error)
+	GetByHash(ctx context.Context, hash string) (*database.Link, error)
 }
 
 type Repository struct {
@@ -39,6 +34,9 @@ func (repo *Repository) Create(ctx context.Context, link *database.Link) (*datab
 		},
 	)
 	if err != nil {
+		if isHashCollision(err) {
+			return nil, ErrHashCollision
+		}
 		return nil, fmt.Errorf("create link: %w", err)
 	}
 
@@ -54,4 +52,12 @@ func (repo *Repository) GetByHash(ctx context.Context, hash string) (*database.L
 		return nil, fmt.Errorf("select link by hash %q: %w", hash, err)
 	}
 	return &link, nil
+}
+
+func isHashCollision(err error) bool {
+	var pgError *pgconn.PgError
+
+	return errors.As(err, &pgError) &&
+		pgError.Code == "23505" &&
+		pgError.ConstraintName == "idx_links_hash"
 }

@@ -1,23 +1,34 @@
 package link
 
 import (
+	"crypto/rand"
+	"fmt"
 	"go-api/internal/database"
-	"math/rand"
+	"math/big"
 )
 
-func NewLink(url string) *database.Link {
+func NewLink(url string, hash string) *database.Link {
 	return &database.Link{
 		Url:  url,
-		Hash: RandStringRunes(10),
+		Hash: hash,
 	}
 }
 
-func RandStringRunes(n int) string {
-	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+var hashAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+func GenerateHash(length int) (string, error) {
+	if length <= 0 {
+		return "", fmt.Errorf("invalid hash length")
 	}
-	return string(b)
+	result := make([]byte, length)
+	alphabetLength := big.NewInt(int64(len(hashAlphabet)))
+	for i := range result {
+		index, err := rand.Int(rand.Reader, alphabetLength)
+		if err != nil {
+			return "", fmt.Errorf("generate random hash: %w", err)
+		}
+		result[i] = hashAlphabet[index.Int64()]
+	}
+
+	return string(result), nil
 }
