@@ -17,9 +17,8 @@ type AuthHandler struct {
 
 func NewAuthHandler(router *http.ServeMux, deps AuthHandlerDeps) {
 	handler := &AuthHandler{Config: deps.Config}
-	prefix := "/auth"
-	router.HandleFunc("POST "+prefix+"/login", handler.login)
-	router.HandleFunc("POST "+prefix+"/register", handler.register)
+	router.HandleFunc("POST /auth/login", handler.login)
+	router.HandleFunc("POST /auth/register", handler.register)
 }
 
 func (handler *AuthHandler) login(w http.ResponseWriter, req *http.Request) {
