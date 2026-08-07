@@ -1,8 +1,6 @@
 package link
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
@@ -73,56 +71,4 @@ func (handler *Handler) goTo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	http.Redirect(w, req, link.Url, http.StatusTemporaryRedirect)
-}
-
-func (handler *Handler) handleError(w http.ResponseWriter, req *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrInvalidURL):
-		response.JsonError(
-			w,
-			http.StatusBadRequest,
-			"INVALID_URL",
-			"URL is invalid",
-		)
-
-	case errors.Is(err, ErrLinkNotFound):
-		response.JsonError(
-			w,
-			http.StatusNotFound,
-			"LINK_NOT_FOUND",
-			"Link not found",
-		)
-
-	case errors.Is(err, context.DeadlineExceeded):
-		handler.logger.WarnContext(
-			req.Context(),
-			"request deadline exceeded",
-			"method", req.Method,
-			"path", req.URL.Path,
-		)
-		response.JsonError(
-			w,
-			http.StatusGatewayTimeout,
-			"REQUEST_TIMEOUT",
-			"Request took too long",
-		)
-
-	case errors.Is(err, context.Canceled):
-		return
-
-	default:
-		handler.logger.ErrorContext(
-			req.Context(),
-			"unexpected link request error",
-			"error", err,
-			"method", req.Method,
-			"path", req.URL.Path,
-		)
-		response.JsonError(
-			w,
-			http.StatusInternalServerError,
-			"INTERNAL_ERROR",
-			"Internal server error",
-		)
-	}
 }

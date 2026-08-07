@@ -7,7 +7,6 @@ import (
 	"go-api/internal/database"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type LinkRepository interface {
@@ -52,12 +51,4 @@ func (repo *Repository) GetByHash(ctx context.Context, hash string) (*database.L
 		return nil, fmt.Errorf("select link by hash %q: %w", hash, err)
 	}
 	return &link, nil
-}
-
-func isHashCollision(err error) bool {
-	var pgError *pgconn.PgError
-
-	return errors.As(err, &pgError) &&
-		pgError.Code == "23505" &&
-		pgError.ConstraintName == "idx_links_hash"
 }

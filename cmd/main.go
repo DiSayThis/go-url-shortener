@@ -17,12 +17,13 @@ import (
 	"go-api/internal/database"
 	"go-api/internal/link"
 	"go-api/pkg/db"
-	"go-api/pkg/logger"
+	"go-api/pkg/logging"
 )
 
 func main() {
-	logger := logger.NewLogger("local")
-	slog.SetDefault(logger)
+	conf := configs.LoadConfig()
+	appLogger := logging.NewLogger(conf.Environment)
+	slog.SetDefault(appLogger)
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
@@ -31,14 +32,13 @@ func main() {
 	)
 	defer stop()
 
-	if err := run(ctx); err != nil {
+	if err := run(ctx, conf); err != nil {
 		slog.Error("application stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context) error {
-	conf := configs.LoadConfig()
+func run(ctx context.Context, conf *configs.Config) error {
 
 	pool, err := db.NewDbPool(ctx, conf.Db.DbUrl)
 	if err != nil {

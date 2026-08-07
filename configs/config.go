@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	Db   DbConfig
-	Http HttpConfig
-	Auth AuthConfig
+	Environment string
+	Db          DbConfig
+	Http        HttpConfig
+	Auth        AuthConfig
 }
 
 type DbConfig struct {
@@ -27,7 +28,6 @@ type HttpConfig struct {
 }
 
 func LoadConfig() *Config {
-
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Error file .env", err.Error())
@@ -36,7 +36,14 @@ func LoadConfig() *Config {
 	if port == "" {
 		port = "8081"
 	}
+
+	environment := os.Getenv("APP_ENV")
+	if environment == "" {
+		environment = "local"
+	}
+
 	return &Config{
+		Environment: environment,
 		Db: DbConfig{
 			DbUrl: os.Getenv("DATABASE_URL"),
 		},
