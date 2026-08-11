@@ -69,6 +69,22 @@ WHERE
 	url,
 	hash;
 
+-- name: UpdateLinkUrlAndHash :one
+UPDATE
+	links
+SET
+	url = sqlc.arg(url),
+	hash = sqlc.arg(hash),
+	updated_at = now()
+WHERE
+	id = sqlc.arg(id)
+	AND deleted_at IS NULL RETURNING id,
+	created_at,
+	updated_at,
+	deleted_at,
+	url,
+	hash;
+
 -- name: SoftDeleteLink :execrows
 UPDATE
 	links

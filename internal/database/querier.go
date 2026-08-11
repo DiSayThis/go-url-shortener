@@ -17,6 +17,7 @@ type Querier interface {
 	RestoreLink(ctx context.Context, id int64) (int64, error)
 	SoftDeleteLink(ctx context.Context, id int64) (int64, error)
 	UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (Link, error)
+	UpdateLinkUrlAndHash(ctx context.Context, arg UpdateLinkUrlAndHashParams) (Link, error)
 }
 
 var _ Querier = (*Queries)(nil)
