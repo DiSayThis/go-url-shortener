@@ -18,6 +18,7 @@ import (
 	"go-api/internal/link"
 	"go-api/pkg/db"
 	"go-api/pkg/logging"
+	"go-api/pkg/middleware"
 )
 
 func main() {
@@ -64,7 +65,7 @@ func run(ctx context.Context, conf *configs.Config) error {
 
 	server := &http.Server{
 		Addr:              net.JoinHostPort(conf.Http.Host, conf.Http.Port),
-		Handler:           router,
+		Handler:           middleware.RequestLogger(router),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
