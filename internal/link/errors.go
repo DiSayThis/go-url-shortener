@@ -55,13 +55,26 @@ func (handler *Handler) handleError(w http.ResponseWriter, req *http.Request, er
 			"Request took too long",
 		)
 
+	case errors.Is(err, ErrHashCollision):
+		handler.logger.WarnContext(
+			req.Context(),
+			"link hash collision",
+			"method", req.Method,
+			"path", req.URL.Path,
+		)
+		response.JsonError(
+			w,
+			http.StatusConflict,
+			"HASH_COLLISION",
+			"Link hash already exists",
+		)
+
 	case errors.Is(err, context.Canceled):
 		return
-
 	default:
 		handler.logger.ErrorContext(
 			req.Context(),
-			"unexpected link request error",
+			err.Error(),
 			"error", err,
 			"method", req.Method,
 			"path", req.URL.Path,

@@ -1,7 +1,6 @@
 package link
 
 import (
-	"fmt"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
 	"log/slog"
@@ -35,10 +34,6 @@ func NewLinkHandler(router *http.ServeMux, deps LinkHandlerDeps) {
 	router.HandleFunc("GET /{hash}", handler.goTo)
 }
 
-type CreateLinkRequest struct {
-	URL string `json:"url" validate:"required,url"`
-}
-
 func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
 	payload, err := request.HandleBody[CreateLinkRequest](w, req)
 	if err != nil {
@@ -56,11 +51,28 @@ func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
 }
 
 func (handler *Handler) update(w http.ResponseWriter, req *http.Request) {
+	payload, err := request.HandleBody[UpdateLinkRequest](w, req)
+	if err != nil {
+		return
+	}
+	idString := req.PathValue("id")
+	result, err := handler.service.UpdateLinkAndHashById(req.Context(), idString, payload.URL, payload.Hash)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+	response.JsonResponse(w, result, http.StatusCreated)
 }
 
 func (handler *Handler) delete(w http.ResponseWriter, req *http.Request) {
 	id := req.PathValue("id")
-	fmt.Println(id)
+
+	findId, err := handler.service.DeleteById(req.Context(), id)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+	response.JsonResponse(w, map[string]interface{}{"id": findId}, http.StatusOK)
 }
 
 func (handler *Handler) goTo(w http.ResponseWriter, req *http.Request) {
