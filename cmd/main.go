@@ -63,9 +63,13 @@ func run(ctx context.Context, conf *configs.Config) error {
 		Logger:  slog.Default(),
 	})
 
+	corsMiddleware := middleware.CORS(conf.CORS.AllowedOrigins)
+	handler := corsMiddleware(router)
+	handler = middleware.RequestLogger(handler)
+
 	server := &http.Server{
 		Addr:              net.JoinHostPort(conf.Http.Host, conf.Http.Port),
-		Handler:           middleware.RequestLogger(router),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}

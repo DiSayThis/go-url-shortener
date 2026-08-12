@@ -3,6 +3,7 @@ package configs
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -12,10 +13,15 @@ type Config struct {
 	Db          DbConfig
 	Http        HttpConfig
 	Auth        AuthConfig
+	CORS        CORSConfig
 }
 
 type DbConfig struct {
 	DbUrl string
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string
 }
 
 type AuthConfig struct {
@@ -41,6 +47,13 @@ func LoadConfig() *Config {
 	if environment == "" {
 		environment = "local"
 	}
+	corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	allowedOrigins := parseCommaSeparatedList(corsOrigins)
+	if len(allowedOrigins) == 0 && environment == "local" {
+		allowedOrigins = []string{
+			"http://localhost:3000",
+		}
+	}
 
 	return &Config{
 		Environment: environment,
@@ -54,5 +67,27 @@ func LoadConfig() *Config {
 		Auth: AuthConfig{
 			Secret: os.Getenv("TOKEN"),
 		},
+		CORS: CORSConfig{
+			AllowedOrigins: allowedOrigins,
+		},
 	}
+}
+
+func parseCommaSeparatedList(value string) []string {
+	if value == "" {
+		return []string{}
+	}
+	items := strings.Split(value, ",")
+
+	result := make([]string, 0, len(items))
+
+	for _, item := range items {
+		origin := strings.TrimSpace(item)
+		if origin == "" {
+			continue
+		}
+		result = append(result, origin)
+	}
+
+	return result
 }
