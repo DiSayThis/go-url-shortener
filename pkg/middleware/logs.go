@@ -14,13 +14,12 @@ func RequestLogger(next http.Handler) http.Handler {
 			slog.Info(
 				"HTTP request started",
 				"method", req.Method,
-				"host", req.URL.Host,
 				"address", req.Header.Get("Origin"),
 				"path", req.URL.Path,
 			)
 			wrapper := &WrapperWriter{
 				ResponseWriter: w,
-				StatusCode:     http.StatusNoContent,
+				StatusCode:     http.StatusOK,
 			}
 			next.ServeHTTP(wrapper, req)
 			duration := time.Since(startedAt)
