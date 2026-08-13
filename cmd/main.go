@@ -52,12 +52,18 @@ func run(ctx context.Context, conf *configs.Config) error {
 
 	//Repositories
 	linkRepository := link.NewLinkRepository(queries)
+	authRepository := auth.NewRepository(queries)
 
 	//Services
+	passwordHasher := auth.NewArgon2idPasswordHasher()
 	linkService := link.NewLinkService(linkRepository)
+	authService := auth.NewService(authRepository, passwordHasher)
 
 	//Handle routes
-	auth.NewAuthHandler(router, auth.AuthHandlerDeps{Config: conf})
+	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
+		Service: authService,
+		Logger:  slog.Default(),
+	})
 	link.NewLinkHandler(router, link.LinkHandlerDeps{
 		Service: linkService,
 		Logger:  slog.Default(),
