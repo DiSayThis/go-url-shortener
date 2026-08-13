@@ -235,3 +235,40 @@ func (q *Queries) UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (L
 	)
 	return i, err
 }
+
+const updateLinkUrlAndHash = `-- name: UpdateLinkUrlAndHash :one
+UPDATE
+	links
+SET
+	url = $1,
+	hash = $2,
+	updated_at = now()
+WHERE
+	id = $3
+	AND deleted_at IS NULL RETURNING id,
+	created_at,
+	updated_at,
+	deleted_at,
+	url,
+	hash
+`
+
+type UpdateLinkUrlAndHashParams struct {
+	Url  string `json:"url"`
+	Hash string `json:"hash"`
+	ID   int64  `json:"id"`
+}
+
+func (q *Queries) UpdateLinkUrlAndHash(ctx context.Context, arg UpdateLinkUrlAndHashParams) (Link, error) {
+	row := q.db.QueryRow(ctx, updateLinkUrlAndHash, arg.Url, arg.Hash, arg.ID)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Url,
+		&i.Hash,
+	)
+	return i, err
+}

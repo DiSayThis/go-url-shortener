@@ -1,9 +1,7 @@
 package link
 
 import (
-	"context"
-	"errors"
-	"fmt"
+	"go-api/pkg/middleware"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
 	"log/slog"
@@ -31,14 +29,10 @@ func NewLinkHandler(router *http.ServeMux, deps LinkHandlerDeps) {
 		logger:  logger.With("component", "link_handler"),
 	}
 
-	router.HandleFunc("POST /link", handler.create)
-	router.HandleFunc("PATCH /link/{id}", handler.update)
-	router.HandleFunc("DELETE /link/{id}", handler.delete)
+	router.Handle("POST /link", middleware.IsAuthed(http.HandlerFunc(handler.create)))
+	router.Handle("PATCH /link/{id}", middleware.IsAuthed(http.HandlerFunc(handler.update)))
+	router.Handle("DELETE /link/{id}", middleware.IsAuthed(http.HandlerFunc(handler.delete)))
 	router.HandleFunc("GET /{hash}", handler.goTo)
-}
-
-type CreateLinkRequest struct {
-	URL string `json:"url" validate:"required,url"`
 }
 
 func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
@@ -58,11 +52,28 @@ func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
 }
 
 func (handler *Handler) update(w http.ResponseWriter, req *http.Request) {
+	payload, err := request.HandleBody[UpdateLinkRequest](w, req)
+	if err != nil {
+		return
+	}
+	idString := req.PathValue("id")
+	result, err := handler.service.UpdateLinkAndHashById(req.Context(), idString, payload.URL, payload.Hash)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+	response.JsonResponse(w, result, http.StatusCreated)
 }
 
 func (handler *Handler) delete(w http.ResponseWriter, req *http.Request) {
 	id := req.PathValue("id")
-	fmt.Println(id)
+
+	findId, err := handler.service.DeleteById(req.Context(), id)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+	response.JsonResponse(w, map[string]interface{}{"id": findId}, http.StatusOK)
 }
 
 func (handler *Handler) goTo(w http.ResponseWriter, req *http.Request) {
@@ -73,56 +84,4 @@ func (handler *Handler) goTo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	http.Redirect(w, req, link.Url, http.StatusTemporaryRedirect)
-}
-
-func (handler *Handler) handleError(w http.ResponseWriter, req *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrInvalidURL):
-		response.JsonError(
-			w,
-			http.StatusBadRequest,
-			"INVALID_URL",
-			"URL is invalid",
-		)
-
-	case errors.Is(err, ErrLinkNotFound):
-		response.JsonError(
-			w,
-			http.StatusNotFound,
-			"LINK_NOT_FOUND",
-			"Link not found",
-		)
-
-	case errors.Is(err, context.DeadlineExceeded):
-		handler.logger.WarnContext(
-			req.Context(),
-			"request deadline exceeded",
-			"method", req.Method,
-			"path", req.URL.Path,
-		)
-		response.JsonError(
-			w,
-			http.StatusGatewayTimeout,
-			"REQUEST_TIMEOUT",
-			"Request took too long",
-		)
-
-	case errors.Is(err, context.Canceled):
-		return
-
-	default:
-		handler.logger.ErrorContext(
-			req.Context(),
-			"unexpected link request error",
-			"error", err,
-			"method", req.Method,
-			"path", req.URL.Path,
-		)
-		response.JsonError(
-			w,
-			http.StatusInternalServerError,
-			"INTERNAL_ERROR",
-			"Internal server error",
-		)
-	}
 }
