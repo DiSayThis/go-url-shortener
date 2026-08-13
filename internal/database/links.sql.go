@@ -7,52 +7,68 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createLink = `-- name: CreateLink :one
-INSERT INTO
-	links (url, hash)
-VALUES
-	($1, $2) RETURNING id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
+INSERT INTO links (
+    user_id,
+    url,
+    hash,
+    title,
+    expires_at
+)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5
+)
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type CreateLinkParams struct {
-	Url  string `json:"url"`
-	Hash string `json:"hash"`
+	UserID    int64              `json:"user_id"`
+	Url       string             `json:"url"`
+	Hash      string             `json:"hash"`
+	Title     pgtype.Text        `json:"title"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, error) {
-	row := q.db.QueryRow(ctx, createLink, arg.Url, arg.Hash)
+	row := q.db.QueryRow(ctx, createLink,
+		arg.UserID,
+		arg.Url,
+		arg.Hash,
+		arg.Title,
+		arg.ExpiresAt,
+	)
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Url,
-		&i.Hash,
 	)
 	return i, err
 }
 
 const getLinkByHash = `-- name: GetLinkByHash :one
-SELECT
-	id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
-FROM
-	links
-WHERE
-	hash = $1
-	AND deleted_at IS NULL
+SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM links
+WHERE hash = $1
+  AND deleted_at IS NULL
+  AND is_active = true
+  AND (expires_at IS NULL OR expires_at > now())
 `
 
 func (q *Queries) GetLinkByHash(ctx context.Context, hash string) (Link, error) {
@@ -60,84 +76,121 @@ func (q *Queries) GetLinkByHash(ctx context.Context, hash string) (Link, error) 
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Url,
-		&i.Hash,
 	)
 	return i, err
 }
 
 const getLinkByID = `-- name: GetLinkByID :one
-SELECT
-	id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
-FROM
-	links
-WHERE
-	id = $1
-	AND deleted_at IS NULL
+SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM links
+WHERE id = $1
+  AND user_id = $2
+  AND deleted_at IS NULL
 `
 
-func (q *Queries) GetLinkByID(ctx context.Context, id int64) (Link, error) {
-	row := q.db.QueryRow(ctx, getLinkByID, id)
+type GetLinkByIDParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetLinkByID(ctx context.Context, arg GetLinkByIDParams) (Link, error) {
+	row := q.db.QueryRow(ctx, getLinkByID, arg.ID, arg.UserID)
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Url,
-		&i.Hash,
 	)
 	return i, err
 }
 
-const hardDeleteLink = `-- name: HardDeleteLink :execrows
-DELETE FROM
-	links
-WHERE
-	id = $1
+const getLinkByPublicID = `-- name: GetLinkByPublicID :one
+SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM links
+WHERE public_id = $1
+  AND user_id = $2
+  AND deleted_at IS NULL
 `
 
-func (q *Queries) HardDeleteLink(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, hardDeleteLink, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+type GetLinkByPublicIDParams struct {
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
 }
 
-const listLinks = `-- name: ListLinks :many
-SELECT
-	id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
-FROM
-	links
-WHERE
-	deleted_at IS NULL
-ORDER BY
-	id DESC
-LIMIT
-	$2 :: integer OFFSET $1 :: integer
+func (q *Queries) GetLinkByPublicID(ctx context.Context, arg GetLinkByPublicIDParams) (Link, error) {
+	row := q.db.QueryRow(ctx, getLinkByPublicID, arg.PublicID, arg.UserID)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const hardDeleteLink = `-- name: HardDeleteLink :one
+DELETE FROM links
+WHERE public_id = $1
+  AND user_id = $2
+RETURNING id
 `
 
-type ListLinksParams struct {
+type HardDeleteLinkParams struct {
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
+}
+
+func (q *Queries) HardDeleteLink(ctx context.Context, arg HardDeleteLinkParams) (int64, error) {
+	row := q.db.QueryRow(ctx, hardDeleteLink, arg.PublicID, arg.UserID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listLinksByUser = `-- name: ListLinksByUser :many
+SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM links
+WHERE user_id = $1
+  AND deleted_at IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT $3::integer
+OFFSET $2::integer
+`
+
+type ListLinksByUserParams struct {
+	UserID     int64 `json:"user_id"`
 	PageOffset int32 `json:"page_offset"`
 	PageSize   int32 `json:"page_size"`
 }
 
-func (q *Queries) ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, error) {
-	rows, err := q.db.Query(ctx, listLinks, arg.PageOffset, arg.PageSize)
+func (q *Queries) ListLinksByUser(ctx context.Context, arg ListLinksByUserParams) ([]Link, error) {
+	rows, err := q.db.Query(ctx, listLinksByUser, arg.UserID, arg.PageOffset, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -147,11 +200,16 @@ func (q *Queries) ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, e
 		var i Link
 		if err := rows.Scan(
 			&i.ID,
+			&i.PublicID,
+			&i.UserID,
+			&i.Url,
+			&i.Hash,
+			&i.Title,
+			&i.IsActive,
+			&i.ExpiresAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.Url,
-			&i.Hash,
 		); err != nil {
 			return nil, err
 		}
@@ -163,112 +221,212 @@ func (q *Queries) ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, e
 	return items, nil
 }
 
-const restoreLink = `-- name: RestoreLink :execrows
-UPDATE
-	links
-SET
-	deleted_at = NULL,
-	updated_at = now()
-WHERE
-	id = $1
-	AND deleted_at IS NOT NULL
+const restoreLink = `-- name: RestoreLink :one
+UPDATE links
+SET deleted_at = NULL,
+    updated_at = now()
+WHERE public_id = $1
+  AND user_id = $2
+  AND deleted_at IS NOT NULL
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) RestoreLink(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, restoreLink, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+type RestoreLinkParams struct {
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
 }
 
-const softDeleteLink = `-- name: SoftDeleteLink :execrows
-UPDATE
-	links
-SET
-	deleted_at = now(),
-	updated_at = now()
-WHERE
-	id = $1
-	AND deleted_at IS NULL
-`
-
-func (q *Queries) SoftDeleteLink(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeleteLink, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const updateLinkURL = `-- name: UpdateLinkURL :one
-UPDATE
-	links
-SET
-	url = $1,
-	updated_at = now()
-WHERE
-	id = $2
-	AND deleted_at IS NULL RETURNING id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
-`
-
-type UpdateLinkURLParams struct {
-	Url string `json:"url"`
-	ID  int64  `json:"id"`
-}
-
-func (q *Queries) UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (Link, error) {
-	row := q.db.QueryRow(ctx, updateLinkURL, arg.Url, arg.ID)
+func (q *Queries) RestoreLink(ctx context.Context, arg RestoreLinkParams) (Link, error) {
+	row := q.db.QueryRow(ctx, restoreLink, arg.PublicID, arg.UserID)
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const setLinkActive = `-- name: SetLinkActive :one
+UPDATE links
+SET is_active = $1,
+    updated_at = now()
+WHERE public_id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+`
+
+type SetLinkActiveParams struct {
+	IsActive bool        `json:"is_active"`
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
+}
+
+func (q *Queries) SetLinkActive(ctx context.Context, arg SetLinkActiveParams) (Link, error) {
+	row := q.db.QueryRow(ctx, setLinkActive, arg.IsActive, arg.PublicID, arg.UserID)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.UserID,
 		&i.Url,
 		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const softDeleteLink = `-- name: SoftDeleteLink :one
+UPDATE links
+SET deleted_at = now(),
+    updated_at = now()
+WHERE public_id = $1
+  AND user_id = $2
+  AND deleted_at IS NULL
+RETURNING id
+`
+
+type SoftDeleteLinkParams struct {
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
+}
+
+func (q *Queries) SoftDeleteLink(ctx context.Context, arg SoftDeleteLinkParams) (int64, error) {
+	row := q.db.QueryRow(ctx, softDeleteLink, arg.PublicID, arg.UserID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const updateLinkMetadata = `-- name: UpdateLinkMetadata :one
+UPDATE links
+SET title = $1,
+    expires_at = $2,
+    updated_at = now()
+WHERE public_id = $3
+  AND user_id = $4
+  AND deleted_at IS NULL
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+`
+
+type UpdateLinkMetadataParams struct {
+	Title     pgtype.Text        `json:"title"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	PublicID  pgtype.UUID        `json:"public_id"`
+	UserID    int64              `json:"user_id"`
+}
+
+func (q *Queries) UpdateLinkMetadata(ctx context.Context, arg UpdateLinkMetadataParams) (Link, error) {
+	row := q.db.QueryRow(ctx, updateLinkMetadata,
+		arg.Title,
+		arg.ExpiresAt,
+		arg.PublicID,
+		arg.UserID,
+	)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateLinkURL = `-- name: UpdateLinkURL :one
+UPDATE links
+SET url = $1,
+    updated_at = now()
+WHERE public_id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+`
+
+type UpdateLinkURLParams struct {
+	Url      string      `json:"url"`
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
+}
+
+func (q *Queries) UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (Link, error) {
+	row := q.db.QueryRow(ctx, updateLinkURL, arg.Url, arg.PublicID, arg.UserID)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const updateLinkUrlAndHash = `-- name: UpdateLinkUrlAndHash :one
-UPDATE
-	links
-SET
-	url = $1,
-	hash = $2,
-	updated_at = now()
-WHERE
-	id = $3
-	AND deleted_at IS NULL RETURNING id,
-	created_at,
-	updated_at,
-	deleted_at,
-	url,
-	hash
+UPDATE links
+SET url = $1,
+    hash = $2,
+    updated_at = now()
+WHERE public_id = $3
+  AND user_id = $4
+  AND deleted_at IS NULL
+RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type UpdateLinkUrlAndHashParams struct {
-	Url  string `json:"url"`
-	Hash string `json:"hash"`
-	ID   int64  `json:"id"`
+	Url      string      `json:"url"`
+	Hash     string      `json:"hash"`
+	PublicID pgtype.UUID `json:"public_id"`
+	UserID   int64       `json:"user_id"`
 }
 
 func (q *Queries) UpdateLinkUrlAndHash(ctx context.Context, arg UpdateLinkUrlAndHashParams) (Link, error) {
-	row := q.db.QueryRow(ctx, updateLinkUrlAndHash, arg.Url, arg.Hash, arg.ID)
+	row := q.db.QueryRow(ctx, updateLinkUrlAndHash,
+		arg.Url,
+		arg.Hash,
+		arg.PublicID,
+		arg.UserID,
+	)
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.UserID,
+		&i.Url,
+		&i.Hash,
+		&i.Title,
+		&i.IsActive,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Url,
-		&i.Hash,
 	)
 	return i, err
 }

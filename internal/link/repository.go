@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"go-api/internal/database"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type LinkRepository interface {
-	Create(ctx context.Context, link *database.Link) (*database.Link, error)
+	Create(ctx context.Context, userID int64, link *database.Link) (*database.Link, error)
 	GetByHash(ctx context.Context, hash string) (*database.Link, error)
-	Update(ctx context.Context, link *database.Link) (*database.Link, error)
-	UpdateWithHash(ctx context.Context, link *database.Link) (*database.Link, error)
-	DeleteById(ctx context.Context, id int64) (int64, error)
+	Update(ctx context.Context, userID int64, publicID pgtype.UUID, url string) (*database.Link, error)
+	UpdateWithHash(ctx context.Context, userID int64, publicID pgtype.UUID, url, hash string) (*database.Link, error)
+	Delete(ctx context.Context, userID int64, publicID pgtype.UUID) error
 }
 
 type Repository struct {
@@ -22,19 +24,15 @@ type Repository struct {
 }
 
 func NewLinkRepository(queries database.Querier) *Repository {
-	return &Repository{
-		queries: queries,
-	}
+	return &Repository{queries: queries}
 }
 
-func (repo *Repository) Create(ctx context.Context, link *database.Link) (*database.Link, error) {
-	createdLink, err := repo.queries.CreateLink(
-		ctx,
-		database.CreateLinkParams{
-			Url:  link.Url,
-			Hash: link.Hash,
-		},
-	)
+func (repo *Repository) Create(ctx context.Context, userID int64, link *database.Link) (*database.Link, error) {
+	createdLink, err := repo.queries.CreateLink(ctx, database.CreateLinkParams{
+		UserID: userID,
+		Url:    link.Url,
+		Hash:   link.Hash,
+	})
 	if err != nil {
 		if isHashCollision(err) {
 			return nil, ErrHashCollision
@@ -46,42 +44,74 @@ func (repo *Repository) Create(ctx context.Context, link *database.Link) (*datab
 }
 
 func (repo *Repository) GetByHash(ctx context.Context, hash string) (*database.Link, error) {
-	link, err := repo.queries.GetLinkByHash(ctx, hash)
+	foundLink, err := repo.queries.GetLinkByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrLinkNotFound
 		}
 		return nil, fmt.Errorf("select link by hash %q: %w", hash, err)
 	}
-	return &link, nil
+
+	return &foundLink, nil
 }
 
-func (repo *Repository) Update(ctx context.Context, link *database.Link) (*database.Link, error) {
-	updatedLink, err := repo.queries.UpdateLinkURL(ctx, database.UpdateLinkURLParams{ID: link.ID, Url: link.Url})
+func (repo *Repository) Update(
+	ctx context.Context,
+	userID int64,
+	publicID pgtype.UUID,
+	url string,
+) (*database.Link, error) {
+	updatedLink, err := repo.queries.UpdateLinkURL(ctx, database.UpdateLinkURLParams{
+		Url:      url,
+		PublicID: publicID,
+		UserID:   userID,
+	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrLinkNotFound
-		}
-		return nil, fmt.Errorf("update link: %w", err)
+		return nil, handleLinkMutationError("update link", err)
 	}
+
 	return &updatedLink, nil
 }
 
-func (repo *Repository) UpdateWithHash(ctx context.Context, link *database.Link) (*database.Link, error) {
-	updatedLink, err := repo.queries.UpdateLinkUrlAndHash(ctx, database.UpdateLinkUrlAndHashParams{ID: link.ID, Url: link.Url, Hash: link.Hash})
+func (repo *Repository) UpdateWithHash(
+	ctx context.Context,
+	userID int64,
+	publicID pgtype.UUID,
+	url string,
+	hash string,
+) (*database.Link, error) {
+	updatedLink, err := repo.queries.UpdateLinkUrlAndHash(ctx, database.UpdateLinkUrlAndHashParams{
+		Url:      url,
+		Hash:     hash,
+		PublicID: publicID,
+		UserID:   userID,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("update link: %w", err)
+		return nil, handleLinkMutationError("update link and hash", err)
 	}
+
 	return &updatedLink, nil
 }
 
-func (repo *Repository) DeleteById(ctx context.Context, id int64) (int64, error) {
-	findId, err := repo.queries.SoftDeleteLink(ctx, id)
+func (repo *Repository) Delete(ctx context.Context, userID int64, publicID pgtype.UUID) error {
+	_, err := repo.queries.SoftDeleteLink(ctx, database.SoftDeleteLinkParams{
+		PublicID: publicID,
+		UserID:   userID,
+	})
 	if err != nil {
-		return findId, fmt.Errorf("delete link: %w", err)
+		return handleLinkMutationError("delete link", err)
 	}
-	if findId == 0 {
-		return findId, ErrLinkNotFound
+
+	return nil
+}
+
+func handleLinkMutationError(operation string, err error) error {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrLinkNotFound
+	case isHashCollision(err):
+		return ErrHashCollision
+	default:
+		return fmt.Errorf("%s: %w", operation, err)
 	}
-	return findId, nil
 }

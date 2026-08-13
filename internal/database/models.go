@@ -5,14 +5,52 @@
 package database
 
 import (
+	"net/netip"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Link struct {
 	ID        int64              `json:"id"`
+	PublicID  pgtype.UUID        `json:"public_id"`
+	UserID    int64              `json:"user_id"`
+	Url       string             `json:"url"`
+	Hash      string             `json:"hash"`
+	Title     pgtype.Text        `json:"title"`
+	IsActive  bool               `json:"is_active"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-	Url       string             `json:"url"`
-	Hash      string             `json:"hash"`
+}
+
+type RefreshToken struct {
+	ID            pgtype.UUID        `json:"id"`
+	FamilyID      pgtype.UUID        `json:"family_id"`
+	UserID        int64              `json:"user_id"`
+	TokenHash     []byte             `json:"token_hash"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	UsedAt        pgtype.Timestamptz `json:"used_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	RevokedReason pgtype.Text        `json:"revoked_reason"`
+	CreatedIp     *netip.Addr        `json:"created_ip"`
+	LastUsedIp    *netip.Addr        `json:"last_used_ip"`
+	UserAgent     pgtype.Text        `json:"user_agent"`
+}
+
+type User struct {
+	ID              int64              `json:"id"`
+	PublicID        pgtype.UUID        `json:"public_id"`
+	Email           string             `json:"email"`
+	DisplayName     string             `json:"display_name"`
+	PasswordHash    pgtype.Text        `json:"password_hash"`
+	Role            string             `json:"role"`
+	Status          string             `json:"status"`
+	EmailVerifiedAt pgtype.Timestamptz `json:"email_verified_at"`
+	LastLoginAt     pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }

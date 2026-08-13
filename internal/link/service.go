@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go-api/internal/database"
-	"strconv"
 	"strings"
+
+	"go-api/internal/database"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type LinkService interface {
-	Create(ctx context.Context, rawURL string) (*database.Link, error)
+	Create(ctx context.Context, userID int64, rawURL string) (*database.Link, error)
 	GetByHash(ctx context.Context, hash string) (*database.Link, error)
-	UpdateLinkAndHashById(ctx context.Context, id, url, hash string) (*database.Link, error)
-	DeleteById(ctx context.Context, id string) (int64, error)
+	Update(ctx context.Context, userID int64, publicID, url, hash string) (*database.Link, error)
+	Delete(ctx context.Context, userID int64, publicID string) error
 }
 
 type Service struct {
@@ -21,9 +23,7 @@ type Service struct {
 }
 
 func NewLinkService(repository LinkRepository) *Service {
-	return &Service{
-		repository: repository,
-	}
+	return &Service{repository: repository}
 }
 
 const (
@@ -31,9 +31,8 @@ const (
 	maxCreateAttempts = 5
 )
 
-func (service *Service) Create(ctx context.Context, rawURL string) (*database.Link, error) {
+func (service *Service) Create(ctx context.Context, userID int64, rawURL string) (*database.Link, error) {
 	rawURL = strings.TrimSpace(rawURL)
-
 	if rawURL == "" {
 		return nil, ErrInvalidURL
 	}
@@ -44,13 +43,10 @@ func (service *Service) Create(ctx context.Context, rawURL string) (*database.Li
 			return nil, fmt.Errorf("generate link hash: %w", err)
 		}
 
-		link := NewLink(rawURL, hash)
-
-		createdLink, err := service.repository.Create(ctx, link)
+		createdLink, err := service.repository.Create(ctx, userID, NewLink(rawURL, hash))
 		if err == nil {
 			return createdLink, nil
 		}
-
 		if !errors.Is(err, ErrHashCollision) {
 			return nil, fmt.Errorf("create link: %w", err)
 		}
@@ -64,17 +60,29 @@ func (service *Service) Create(ctx context.Context, rawURL string) (*database.Li
 }
 
 func (service *Service) GetByHash(ctx context.Context, hash string) (*database.Link, error) {
-	link, err := service.repository.GetByHash(ctx, hash)
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return nil, ErrLinkNotFound
+	}
+
+	foundLink, err := service.repository.GetByHash(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("get link by hash: %w", err)
 	}
-	return link, nil
+
+	return foundLink, nil
 }
 
-func (service *Service) UpdateLinkAndHashById(ctx context.Context, id, url, hash string) (*database.Link, error) {
-	idInt64, err := strconv.ParseInt(id, 10, 64)
+func (service *Service) Update(
+	ctx context.Context,
+	userID int64,
+	publicID string,
+	url string,
+	hash string,
+) (*database.Link, error) {
+	parsedPublicID, err := parsePublicID(publicID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
+		return nil, err
 	}
 
 	url = strings.TrimSpace(url)
@@ -82,30 +90,47 @@ func (service *Service) UpdateLinkAndHashById(ctx context.Context, id, url, hash
 		return nil, ErrInvalidURL
 	}
 
+	hash = strings.TrimSpace(hash)
 	if hash != "" {
-		updatedLink, err := service.repository.UpdateWithHash(ctx, &database.Link{ID: idInt64, Url: url, Hash: hash})
+		updatedLink, err := service.repository.UpdateWithHash(
+			ctx,
+			userID,
+			parsedPublicID,
+			url,
+			hash,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("update link: %w", err)
 		}
 		return updatedLink, nil
 	}
 
-	updatedLink, err := service.repository.Update(ctx, &database.Link{ID: idInt64, Url: url})
+	updatedLink, err := service.repository.Update(ctx, userID, parsedPublicID, url)
 	if err != nil {
 		return nil, fmt.Errorf("update link: %w", err)
 	}
-	return updatedLink, nil
 
+	return updatedLink, nil
 }
 
-func (service *Service) DeleteById(ctx context.Context, id string) (int64, error) {
-	idInt64, err := strconv.ParseInt(id, 10, 64)
+func (service *Service) Delete(ctx context.Context, userID int64, publicID string) error {
+	parsedPublicID, err := parsePublicID(publicID)
 	if err != nil {
-		return 0, fmt.Errorf("invalid id: %w", err)
+		return err
 	}
-	findId, err := service.repository.DeleteById(ctx, idInt64)
-	if err != nil {
-		return findId, fmt.Errorf("delete link by id: %w", err)
+
+	if err := service.repository.Delete(ctx, userID, parsedPublicID); err != nil {
+		return fmt.Errorf("delete link: %w", err)
 	}
-	return findId, nil
+
+	return nil
+}
+
+func parsePublicID(value string) (pgtype.UUID, error) {
+	var publicID pgtype.UUID
+	if err := publicID.Scan(strings.TrimSpace(value)); err != nil || !publicID.Valid {
+		return pgtype.UUID{}, ErrInvalidLinkID
+	}
+
+	return publicID, nil
 }

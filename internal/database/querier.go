@@ -6,18 +6,44 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CreateLink(ctx context.Context, arg CreateLinkParams) (Link, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	CreateRotatedRefreshToken(ctx context.Context, arg CreateRotatedRefreshTokenParams) (RefreshToken, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error)
+	DeleteExpiredRefreshTokens(ctx context.Context, arg DeleteExpiredRefreshTokensParams) (int64, error)
 	GetLinkByHash(ctx context.Context, hash string) (Link, error)
-	GetLinkByID(ctx context.Context, id int64) (Link, error)
-	HardDeleteLink(ctx context.Context, id int64) (int64, error)
-	ListLinks(ctx context.Context, arg ListLinksParams) ([]Link, error)
-	RestoreLink(ctx context.Context, id int64) (int64, error)
-	SoftDeleteLink(ctx context.Context, id int64) (int64, error)
+	GetLinkByID(ctx context.Context, arg GetLinkByIDParams) (Link, error)
+	GetLinkByPublicID(ctx context.Context, arg GetLinkByPublicIDParams) (Link, error)
+	GetRefreshTokenForUpdate(ctx context.Context, id pgtype.UUID) (RefreshToken, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserByPublicID(ctx context.Context, publicID pgtype.UUID) (User, error)
+	HardDeleteLink(ctx context.Context, arg HardDeleteLinkParams) (int64, error)
+	ListActiveUserRefreshSessions(ctx context.Context, userID int64) ([]ListActiveUserRefreshSessionsRow, error)
+	ListLinksByUser(ctx context.Context, arg ListLinksByUserParams) ([]Link, error)
+	MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) (RefreshToken, error)
+	MarkUserEmailVerified(ctx context.Context, id int64) (User, error)
+	RestoreLink(ctx context.Context, arg RestoreLinkParams) (Link, error)
+	RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllUserRefreshTokensParams) (int64, error)
+	RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefreshTokenFamilyParams) (int64, error)
+	RevokeUserRefreshTokenFamily(ctx context.Context, arg RevokeUserRefreshTokenFamilyParams) (int64, error)
+	SetLinkActive(ctx context.Context, arg SetLinkActiveParams) (Link, error)
+	SoftDeleteLink(ctx context.Context, arg SoftDeleteLinkParams) (int64, error)
+	SoftDeleteUser(ctx context.Context, id int64) (int64, error)
+	UpdateLinkMetadata(ctx context.Context, arg UpdateLinkMetadataParams) (Link, error)
 	UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (Link, error)
 	UpdateLinkUrlAndHash(ctx context.Context, arg UpdateLinkUrlAndHashParams) (Link, error)
+	UpdateUserLastLogin(ctx context.Context, id int64) error
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
+	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

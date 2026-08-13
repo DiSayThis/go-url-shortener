@@ -1,11 +1,13 @@
 package link
 
 import (
+	"log/slog"
+	"net/http"
+
+	"go-api/internal/auth"
 	"go-api/pkg/middleware"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
-	"log/slog"
-	"net/http"
 )
 
 type LinkHandlerDeps struct {
@@ -29,59 +31,83 @@ func NewLinkHandler(router *http.ServeMux, deps LinkHandlerDeps) {
 		logger:  logger.With("component", "link_handler"),
 	}
 
-	router.Handle("POST /link", middleware.IsAuthed(http.HandlerFunc(handler.create)))
-	router.Handle("PATCH /link/{id}", middleware.IsAuthed(http.HandlerFunc(handler.update)))
-	router.Handle("DELETE /link/{id}", middleware.IsAuthed(http.HandlerFunc(handler.delete)))
+	// RequireAuth гарантирует, что защищённые handlers получат Principal.
+	router.Handle("POST /links", middleware.RequireAuth(handler.create))
+	router.Handle("PATCH /links/{publicID}", middleware.RequireAuth(handler.update))
+	router.Handle("DELETE /links/{publicID}", middleware.RequireAuth(handler.delete))
+
+	// Redirect публичный, поэтому middleware здесь не нужен.
 	router.HandleFunc("GET /{hash}", handler.goTo)
 }
 
 func (handler *Handler) create(w http.ResponseWriter, req *http.Request) {
+	principal, ok := auth.RequirePrincipal(w, req)
+	if !ok {
+		return
+	}
 	payload, err := request.HandleBody[CreateLinkRequest](w, req)
 	if err != nil {
 		return
 	}
-	result, err := handler.service.Create(
+
+	// UserID берётся из проверенного Principal, а не из JSON клиента.
+	result, err := handler.service.Create(req.Context(), principal.UserID, payload.URL)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+
+	response.JsonResponse(w, newLinkResponse(result), http.StatusCreated)
+}
+
+func (handler *Handler) update(w http.ResponseWriter, req *http.Request) {
+	principal, ok := auth.RequirePrincipal(w, req)
+	if !ok {
+		return
+	}
+	payload, err := request.HandleBody[UpdateLinkRequest](w, req)
+	if err != nil {
+		return
+	}
+
+	result, err := handler.service.Update(
 		req.Context(),
+		principal.UserID,
+		req.PathValue("publicID"),
 		payload.URL,
+		payload.Hash,
 	)
 	if err != nil {
 		handler.handleError(w, req, err)
 		return
 	}
-	response.JsonResponse(w, result, http.StatusCreated)
-}
 
-func (handler *Handler) update(w http.ResponseWriter, req *http.Request) {
-	payload, err := request.HandleBody[UpdateLinkRequest](w, req)
-	if err != nil {
-		return
-	}
-	idString := req.PathValue("id")
-	result, err := handler.service.UpdateLinkAndHashById(req.Context(), idString, payload.URL, payload.Hash)
-	if err != nil {
-		handler.handleError(w, req, err)
-		return
-	}
-	response.JsonResponse(w, result, http.StatusCreated)
+	response.JsonResponse(w, newLinkResponse(result), http.StatusOK)
 }
 
 func (handler *Handler) delete(w http.ResponseWriter, req *http.Request) {
-	id := req.PathValue("id")
-
-	findId, err := handler.service.DeleteById(req.Context(), id)
-	if err != nil {
+	principal, ok := auth.RequirePrincipal(w, req)
+	if !ok {
+		return
+	}
+	if err := handler.service.Delete(
+		req.Context(),
+		principal.UserID,
+		req.PathValue("publicID"),
+	); err != nil {
 		handler.handleError(w, req, err)
 		return
 	}
-	response.JsonResponse(w, map[string]interface{}{"id": findId}, http.StatusOK)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *Handler) goTo(w http.ResponseWriter, req *http.Request) {
-	hash := req.PathValue("hash")
-	link, err := handler.service.GetByHash(req.Context(), hash)
+	foundLink, err := handler.service.GetByHash(req.Context(), req.PathValue("hash"))
 	if err != nil {
 		handler.handleError(w, req, err)
 		return
 	}
-	http.Redirect(w, req, link.Url, http.StatusTemporaryRedirect)
+
+	http.Redirect(w, req, foundLink.Url, http.StatusTemporaryRedirect)
 }

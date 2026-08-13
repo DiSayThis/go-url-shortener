@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrInvalidURL    = errors.New("invalid URL")
+	ErrInvalidLinkID = errors.New("invalid link ID")
 	ErrLinkNotFound  = errors.New("link not found")
 	ErrHashCollision = errors.New("link hash collision")
 )
@@ -20,7 +21,7 @@ func isHashCollision(err error) bool {
 
 	return errors.As(err, &pgError) &&
 		pgError.Code == "23505" &&
-		pgError.ConstraintName == "idx_links_hash"
+		pgError.ConstraintName == "uq_links_hash"
 }
 
 func (handler *Handler) handleError(w http.ResponseWriter, req *http.Request, err error) {
@@ -31,6 +32,14 @@ func (handler *Handler) handleError(w http.ResponseWriter, req *http.Request, er
 			http.StatusBadRequest,
 			"INVALID_URL",
 			"URL is invalid",
+		)
+
+	case errors.Is(err, ErrInvalidLinkID):
+		response.JsonError(
+			w,
+			http.StatusBadRequest,
+			"INVALID_LINK_ID",
+			"Link ID is invalid",
 		)
 
 	case errors.Is(err, ErrLinkNotFound):
