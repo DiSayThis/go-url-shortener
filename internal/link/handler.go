@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"go-api/internal/auth"
-	"go-api/pkg/middleware"
+	"go-api/internal/middleware"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
 )

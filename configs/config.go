@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -25,7 +26,11 @@ type CORSConfig struct {
 }
 
 type AuthConfig struct {
-	Secret string
+	Secret   []byte
+	TTL      time.Duration
+	Issuer   string
+	Audience string
+	Leeway   time.Duration
 }
 
 type HttpConfig struct {
@@ -65,7 +70,11 @@ func LoadConfig() *Config {
 			Host: os.Getenv("HOST"),
 		},
 		Auth: AuthConfig{
-			Secret: os.Getenv("TOKEN"),
+			Secret:   []byte(os.Getenv("TOKEN")),
+			TTL:      15 * time.Minute,
+			Issuer:   "go-url-shortener",
+			Audience: "go-url-shortener",
+			Leeway:   30 * time.Second,
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: allowedOrigins,

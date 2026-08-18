@@ -56,13 +56,18 @@ func run(ctx context.Context, conf *configs.Config) error {
 
 	//Services
 	passwordHasher := auth.NewArgon2idPasswordHasher()
+	tokenService, err := auth.NewJWTAccessTokenService(conf.Auth)
+	if err != nil {
+		return fmt.Errorf("create access token service: %w", err)
+	}
 	linkService := link.NewLinkService(linkRepository)
 	authService := auth.NewService(authRepository, passwordHasher)
 
 	//Handle routes
 	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
-		Service: authService,
-		Logger:  slog.Default(),
+		Service:      authService,
+		AccessTokens: tokenService,
+		Logger:       slog.Default(),
 	})
 	link.NewLinkHandler(router, link.LinkHandlerDeps{
 		Service: linkService,

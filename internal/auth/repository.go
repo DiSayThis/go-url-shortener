@@ -50,7 +50,6 @@ func (repo *Repository) CreateUser(
 		if isEmailCollision(err) {
 			return nil, ErrEmailAlreadyExists
 		}
-
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
