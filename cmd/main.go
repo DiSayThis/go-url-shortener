@@ -17,6 +17,7 @@ import (
 	"go-api/internal/database"
 	"go-api/internal/link"
 	"go-api/pkg/db"
+	"go-api/pkg/jwt"
 	"go-api/pkg/logging"
 	"go-api/pkg/middleware"
 )
@@ -52,22 +53,29 @@ func run(ctx context.Context, conf *configs.Config) error {
 
 	//Repositories
 	linkRepository := link.NewLinkRepository(queries)
-	authRepository := auth.NewRepository(queries)
+	authRepository := auth.NewUserRepository(queries)
+	refreshRepository := auth.NewRefreshRepository(pool)
 
 	//Services
 	passwordHasher := auth.NewArgon2idPasswordHasher()
-	tokenService, err := auth.NewJWTAccessTokenService(conf.Auth)
+	tokenService, err := jwt.NewJWTAccessTokenService(conf.Auth)
 	if err != nil {
 		return fmt.Errorf("create access token service: %w", err)
 	}
 	linkService := link.NewLinkService(linkRepository)
-	authService := auth.NewService(authRepository, passwordHasher)
+	authService := auth.NewService(auth.ServiceDeps{
+		UserRepository:    authRepository,
+		RefreshRepository: refreshRepository,
+		Passwords:         passwordHasher,
+		AccessTokens:      tokenService,
+		RefreshTTL:        conf.Auth.RefreshTTL,
+	})
 
 	//Handle routes
 	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
-		Service:      authService,
-		AccessTokens: tokenService,
-		Logger:       slog.Default(),
+		Service:             authService,
+		Logger:              slog.Default(),
+		RefreshCookieSecure: true,
 	})
 	link.NewLinkHandler(router, link.LinkHandlerDeps{
 		Service: linkService,
@@ -76,9 +84,11 @@ func run(ctx context.Context, conf *configs.Config) error {
 
 	//Middlewares
 	corsMiddleware := middleware.CORS(conf.CORS.AllowedOrigins)
+	authMiddleware := middleware.FindToken(tokenService)
 	stack := middleware.Chain(
 		middleware.RequestLogger,
 		corsMiddleware,
+		authMiddleware,
 	)(router)
 
 	server := &http.Server{

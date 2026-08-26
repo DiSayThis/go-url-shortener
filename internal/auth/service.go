@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"time"
 
 	"go-api/internal/database"
+	"go-api/pkg/jwt"
 )
 
 const minPasswordLength = 8
@@ -25,21 +27,53 @@ type RegisterInput struct {
 	Password    string
 }
 
+type LoginInput struct {
+	Email     string
+	Password  string
+	UserAgent string
+}
+
+type LoginResult struct {
+	User                  *database.User
+	AccessToken           string
+	AccessTokenExpiresAt  time.Time
+	RefreshToken          string
+	RefreshTokenExpiresAt time.Time
+	RefreshTokenTTL       time.Duration
+}
+
 type AuthService interface {
 	Register(ctx context.Context, input RegisterInput) (*database.User, error)
-	Authenticate(ctx context.Context, email, password string) (*database.User, error)
-	GetUser(ctx context.Context, userID int64) (*database.User, error)
+	Login(ctx context.Context, input LoginInput) (*LoginResult, error)
+}
+
+type AccessTokenIssuer interface {
+	Issue(input jwt.AccessTokenInput) (jwt.IssuedAccessToken, error)
+}
+
+type ServiceDeps struct {
+	UserRepository    UserStore
+	RefreshRepository RefreshStore
+	Passwords         PasswordHasher
+	AccessTokens      AccessTokenIssuer
+	RefreshTTL        time.Duration
 }
 
 type Service struct {
-	repository AuthRepository
-	passwords  PasswordHasher
+	userRepository    UserStore
+	refreshRepository RefreshStore
+	passwords         PasswordHasher
+	accessTokens      AccessTokenIssuer
+	refreshTTL        time.Duration
 }
 
-func NewService(repository AuthRepository, passwords PasswordHasher) *Service {
+func NewService(deps ServiceDeps) *Service {
 	return &Service{
-		repository: repository,
-		passwords:  passwords,
+		userRepository:    deps.UserRepository,
+		refreshRepository: deps.RefreshRepository,
+		passwords:         deps.Passwords,
+		accessTokens:      deps.AccessTokens,
+		refreshTTL:        deps.RefreshTTL,
 	}
 }
 
@@ -65,7 +99,7 @@ func (service *Service) Register(
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	user, err := service.repository.CreateUser(ctx, CreateUserParams{
+	user, err := service.userRepository.CreateUser(ctx, CreateUserParams{
 		Email:        email,
 		DisplayName:  displayName,
 		PasswordHash: passwordHash,
@@ -75,6 +109,58 @@ func (service *Service) Register(
 	}
 
 	return user, nil
+}
+
+func (service *Service) Login(
+	ctx context.Context,
+	input LoginInput,
+) (*LoginResult, error) {
+	user, err := service.Authenticate(ctx, input.Email, input.Password)
+	if err != nil {
+		return nil, err
+	}
+	if !user.PublicID.Valid {
+		return nil, fmt.Errorf("authenticated user has invalid public ID")
+	}
+
+	refreshToken, err := GenerateRefreshToken()
+	if err != nil {
+		return nil, err
+	}
+	refreshExpiresAt := time.Now().UTC().Add(service.refreshTTL)
+
+	session, err := service.refreshRepository.CreateRefreshToken(
+		ctx,
+		CreateRefreshTokenParams{
+			UserID:    user.ID,
+			TokenHash: refreshToken.Hash,
+			ExpiresAt: refreshExpiresAt,
+			UserAgent: input.UserAgent,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create refresh session: %w", err)
+	}
+
+	issuedToken, err := service.accessTokens.Issue(jwt.AccessTokenInput{
+		UserID:    user.ID,
+		PublicID:  user.PublicID.String(),
+		Role:      user.Role,
+		SessionID: session.FamilyID.String(),
+		Scopes:    nil,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("issue access token: %w", err)
+	}
+
+	return &LoginResult{
+		User:                  user,
+		AccessToken:           issuedToken.Token,
+		AccessTokenExpiresAt:  issuedToken.ExpiresAt,
+		RefreshToken:          refreshToken.Raw,
+		RefreshTokenExpiresAt: refreshExpiresAt,
+		RefreshTokenTTL:       service.refreshTTL,
+	}, nil
 }
 
 func (service *Service) Authenticate(
@@ -87,7 +173,7 @@ func (service *Service) Authenticate(
 		return nil, ErrInvalidCredentials
 	}
 
-	user, err := service.repository.GetUserByEmail(ctx, email)
+	user, err := service.userRepository.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, ErrInvalidCredentials
@@ -110,7 +196,7 @@ func (service *Service) Authenticate(
 		return nil, ErrUserInactive
 	}
 
-	if err := service.repository.UpdateLastLogin(ctx, user.ID); err != nil {
+	if err := service.userRepository.UpdateLastLogin(ctx, user.ID); err != nil {
 		return nil, fmt.Errorf("record successful login: %w", err)
 	}
 
@@ -125,7 +211,7 @@ func (service *Service) GetUser(
 		return nil, ErrUserNotFound
 	}
 
-	user, err := service.repository.GetUserByID(ctx, userID)
+	user, err := service.userRepository.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}

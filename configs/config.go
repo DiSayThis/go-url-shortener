@@ -26,11 +26,12 @@ type CORSConfig struct {
 }
 
 type AuthConfig struct {
-	Secret   []byte
-	TTL      time.Duration
-	Issuer   string
-	Audience string
-	Leeway   time.Duration
+	Secret     []byte
+	TTL        time.Duration
+	RefreshTTL time.Duration
+	Issuer     string
+	Audience   string
+	Leeway     time.Duration
 }
 
 type HttpConfig struct {
@@ -70,11 +71,12 @@ func LoadConfig() *Config {
 			Host: os.Getenv("HOST"),
 		},
 		Auth: AuthConfig{
-			Secret:   []byte(os.Getenv("TOKEN")),
-			TTL:      15 * time.Minute,
-			Issuer:   "go-url-shortener",
-			Audience: "go-url-shortener",
-			Leeway:   30 * time.Second,
+			Secret:     []byte(os.Getenv("TOKEN")),
+			TTL:        15 * time.Minute,
+			RefreshTTL: 30 * 24 * time.Hour,
+			Issuer:     "go-url-shortener",
+			Audience:   "go-url-shortener",
+			Leeway:     30 * time.Second,
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: allowedOrigins,

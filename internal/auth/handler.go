@@ -1,23 +1,23 @@
 package auth
 
 import (
-	"fmt"
-	"go-api/pkg/request"
-	"go-api/pkg/response"
 	"log/slog"
 	"net/http"
+
+	"go-api/pkg/request"
+	"go-api/pkg/response"
 )
 
 type AuthHandlerDeps struct {
-	Service      AuthService
-	AccessTokens AccessTokenService
-	Logger       *slog.Logger
+	Service             AuthService
+	Logger              *slog.Logger
+	RefreshCookieSecure bool
 }
 
 type AuthHandler struct {
-	Service      AuthService
-	AccessTokens AccessTokenService
-	Logger       *slog.Logger
+	Service             AuthService
+	Logger              *slog.Logger
+	RefreshCookieSecure bool
 }
 
 func NewAuthHandler(router *http.ServeMux, deps AuthHandlerDeps) {
@@ -27,13 +27,18 @@ func NewAuthHandler(router *http.ServeMux, deps AuthHandlerDeps) {
 	}
 
 	handler := &AuthHandler{
-		Service:      deps.Service,
-		AccessTokens: deps.AccessTokens,
-		Logger:       logger.With("component", "auth_handler"),
+		Service:             deps.Service,
+		Logger:              logger.With("component", "auth_handler"),
+		RefreshCookieSecure: deps.RefreshCookieSecure,
 	}
 
 	router.HandleFunc("POST /auth/login", handler.login)
 	router.HandleFunc("POST /auth/register", handler.register)
+	router.HandleFunc("POST /auth/refresh", handler.refresh)
+	router.HandleFunc("POST /auth/logout", handler.register)
+	router.HandleFunc("POST /auth/sessions", handler.register)
+	router.HandleFunc("POST /auth/sessions/{familyID}", handler.register)
+	router.HandleFunc("POST /auth/logout-all", handler.register)
 }
 
 func (handler *AuthHandler) login(w http.ResponseWriter, req *http.Request) {
@@ -41,56 +46,40 @@ func (handler *AuthHandler) login(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	user, err := handler.Service.Authenticate(req.Context(), body.Email, body.Password)
+	result, err := handler.Service.Login(req.Context(), LoginInput{
+		Email:     body.Email,
+		Password:  body.Password,
+		UserAgent: req.UserAgent(),
+	})
 	if err != nil {
 		handler.handleError(w, req, err)
 		return
 	}
-	if !user.PublicID.Valid {
-		handler.handleError(w, req,
-			fmt.Errorf("authenticated user has invalid public ID"),
-		)
-		return
-	}
-	sessionID, err := generateTokenID()
-	if err != nil {
-		handler.handleError(
-			w,
-			req,
-			fmt.Errorf("generate session ID: %w", err),
-		)
-		return
-	}
 
-	issuedToken, err := handler.AccessTokens.Issue(AccessTokenInput{
-		UserID:    user.ID,
-		PublicID:  user.PublicID.String(),
-		Role:      user.Role,
-		SessionID: sessionID,
-		Scopes:    nil,
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    result.RefreshToken,
+		Path:     "/auth",
+		HttpOnly: true,
+		Secure:   handler.RefreshCookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  result.RefreshTokenExpiresAt,
+		MaxAge:   int(result.RefreshTokenTTL.Seconds()),
 	})
-	if err != nil {
-		handler.handleError(
-			w,
-			req,
-			fmt.Errorf("issue access token: %w", err),
-		)
-		return
-	}
 
-	result := LoginResponse{
-		AccessToken: issuedToken.Token,
+	responseBody := LoginResponse{
+		AccessToken: result.AccessToken,
 		TokenType:   "Bearer",
-		ExpiresAt:   issuedToken.ExpiresAt,
+		ExpiresAt:   result.AccessTokenExpiresAt,
 		User: UserResponse{
-			PublicID:    user.PublicID.String(),
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Role:        user.Role,
+			PublicID:    result.User.PublicID.String(),
+			Email:       result.User.Email,
+			DisplayName: result.User.DisplayName,
+			Role:        result.User.Role,
 		},
 	}
 
-	response.JsonResponse(w, result, http.StatusOK)
+	response.JsonResponse(w, responseBody, http.StatusOK)
 }
 
 func (handler *AuthHandler) register(w http.ResponseWriter, req *http.Request) {
@@ -107,6 +96,9 @@ func (handler *AuthHandler) register(w http.ResponseWriter, req *http.Request) {
 		handler.handleError(w, req, err)
 		return
 	}
-	fmt.Println(user)
 	response.JsonResponse(w, user, http.StatusCreated)
+}
+
+func (handler *AuthHandler) refresh(w http.ResponseWriter, req *http.Request) {
+
 }

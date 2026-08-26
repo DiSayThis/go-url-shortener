@@ -20,7 +20,7 @@ type Querier interface {
 	GetLinkByHash(ctx context.Context, hash string) (Link, error)
 	GetLinkByID(ctx context.Context, arg GetLinkByIDParams) (Link, error)
 	GetLinkByPublicID(ctx context.Context, arg GetLinkByPublicIDParams) (Link, error)
-	GetRefreshTokenForUpdate(ctx context.Context, id pgtype.UUID) (RefreshToken, error)
+	GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByPublicID(ctx context.Context, publicID pgtype.UUID) (User, error)

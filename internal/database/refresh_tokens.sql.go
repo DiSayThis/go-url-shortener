@@ -13,21 +13,22 @@ import (
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (
+INSERT INTO
+  refresh_tokens (
     user_id,
     token_hash,
     expires_at,
     created_ip,
     user_agent
-)
-VALUES (
+  )
+VALUES
+  (
     $1,
     $2,
     $3,
     $4,
     $5
-)
-RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
+  ) RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
 `
 
 type CreateRefreshTokenParams struct {
@@ -66,7 +67,8 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const createRotatedRefreshToken = `-- name: CreateRotatedRefreshToken :one
-INSERT INTO refresh_tokens (
+INSERT INTO
+  refresh_tokens (
     family_id,
     user_id,
     token_hash,
@@ -74,8 +76,9 @@ INSERT INTO refresh_tokens (
     expires_at,
     created_ip,
     user_agent
-)
-VALUES (
+  )
+VALUES
+  (
     $1,
     $2,
     $3,
@@ -83,8 +86,7 @@ VALUES (
     $5,
     $6,
     $7
-)
-RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
+  ) RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
 `
 
 type CreateRotatedRefreshTokenParams struct {
@@ -127,9 +129,11 @@ func (q *Queries) CreateRotatedRefreshToken(ctx context.Context, arg CreateRotat
 }
 
 const deleteExpiredRefreshTokens = `-- name: DeleteExpiredRefreshTokens :execrows
-DELETE FROM refresh_tokens
-WHERE expires_at < $1
-   OR revoked_at < $2
+DELETE FROM
+  refresh_tokens
+WHERE
+  expires_at < $1
+  OR revoked_at < $2
 `
 
 type DeleteExpiredRefreshTokensParams struct {
@@ -146,14 +150,17 @@ func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context, arg DeleteExpi
 }
 
 const getRefreshTokenForUpdate = `-- name: GetRefreshTokenForUpdate :one
-SELECT id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
-FROM refresh_tokens
-WHERE id = $1
-FOR UPDATE
+SELECT
+  id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
+FROM
+  refresh_tokens
+WHERE
+  token_hash = $1 FOR
+UPDATE
 `
 
-func (q *Queries) GetRefreshTokenForUpdate(ctx context.Context, id pgtype.UUID) (RefreshToken, error) {
-	row := q.db.QueryRow(ctx, getRefreshTokenForUpdate, id)
+func (q *Queries) GetRefreshTokenForUpdate(ctx context.Context, tokenHash []byte) (RefreshToken, error) {
+	row := q.db.QueryRow(ctx, getRefreshTokenForUpdate, tokenHash)
 	var i RefreshToken
 	err := row.Scan(
 		&i.ID,
@@ -174,21 +181,25 @@ func (q *Queries) GetRefreshTokenForUpdate(ctx context.Context, id pgtype.UUID) 
 }
 
 const listActiveUserRefreshSessions = `-- name: ListActiveUserRefreshSessions :many
-SELECT DISTINCT ON (family_id)
-    id,
-    family_id,
-    user_id,
-    parent_id,
-    created_at,
-    expires_at,
-    last_used_ip,
-    created_ip,
-    user_agent
-FROM refresh_tokens
-WHERE user_id = $1
+SELECT
+  DISTINCT ON (family_id) id,
+  family_id,
+  user_id,
+  parent_id,
+  created_at,
+  expires_at,
+  last_used_ip,
+  created_ip,
+  user_agent
+FROM
+  refresh_tokens
+WHERE
+  user_id = $1
   AND revoked_at IS NULL
   AND expires_at > now()
-ORDER BY family_id, created_at DESC
+ORDER BY
+  family_id,
+  created_at DESC
 `
 
 type ListActiveUserRefreshSessionsRow struct {
@@ -234,14 +245,16 @@ func (q *Queries) ListActiveUserRefreshSessions(ctx context.Context, userID int6
 }
 
 const markRefreshTokenUsed = `-- name: MarkRefreshTokenUsed :one
-UPDATE refresh_tokens
-SET used_at = now(),
-    last_used_ip = $1
-WHERE id = $2
+UPDATE
+  refresh_tokens
+SET
+  used_at = now(),
+  last_used_ip = $1
+WHERE
+  id = $2
   AND used_at IS NULL
   AND revoked_at IS NULL
-  AND expires_at > now()
-RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
+  AND expires_at > now() RETURNING id, family_id, user_id, token_hash, parent_id, created_at, expires_at, used_at, revoked_at, revoked_reason, created_ip, last_used_ip, user_agent
 `
 
 type MarkRefreshTokenUsedParams struct {
@@ -271,10 +284,13 @@ func (q *Queries) MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshToken
 }
 
 const revokeAllUserRefreshTokens = `-- name: RevokeAllUserRefreshTokens :execrows
-UPDATE refresh_tokens
-SET revoked_at = COALESCE(revoked_at, now()),
-    revoked_reason = COALESCE(revoked_reason, $1)
-WHERE user_id = $2
+UPDATE
+  refresh_tokens
+SET
+  revoked_at = COALESCE(revoked_at, now()),
+  revoked_reason = COALESCE(revoked_reason, $1)
+WHERE
+  user_id = $2
   AND revoked_at IS NULL
 `
 
@@ -292,10 +308,13 @@ func (q *Queries) RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllU
 }
 
 const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :execrows
-UPDATE refresh_tokens
-SET revoked_at = COALESCE(revoked_at, now()),
-    revoked_reason = COALESCE(revoked_reason, $1)
-WHERE family_id = $2
+UPDATE
+  refresh_tokens
+SET
+  revoked_at = COALESCE(revoked_at, now()),
+  revoked_reason = COALESCE(revoked_reason, $1)
+WHERE
+  family_id = $2
   AND revoked_at IS NULL
 `
 
@@ -313,10 +332,13 @@ func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefres
 }
 
 const revokeUserRefreshTokenFamily = `-- name: RevokeUserRefreshTokenFamily :execrows
-UPDATE refresh_tokens
-SET revoked_at = COALESCE(revoked_at, now()),
-    revoked_reason = COALESCE(revoked_reason, $1)
-WHERE family_id = $2
+UPDATE
+  refresh_tokens
+SET
+  revoked_at = COALESCE(revoked_at, now()),
+  revoked_reason = COALESCE(revoked_reason, $1)
+WHERE
+  family_id = $2
   AND user_id = $3
   AND revoked_at IS NULL
 `
