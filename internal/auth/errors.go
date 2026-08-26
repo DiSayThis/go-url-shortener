@@ -26,9 +26,6 @@ var (
 	ErrPasswordMismatch    = errors.New("password does not match")
 	ErrInvalidPasswordHash = errors.New("invalid password hash")
 	ErrAccessTokenConfig   = errors.New("invalid token config")
-	ErrInvalidTokenSubject = errors.New("invalid token subject")
-	ErrInvalidAccessToken  = errors.New("invalid access token")
-	ErrAccessTokenExpired  = errors.New("access token expired")
 )
 
 func isEmailCollision(err error) bool {
