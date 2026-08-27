@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go-api/internal/database"
+	"net/netip"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,6 +19,7 @@ type RefreshRepository struct {
 }
 type RefreshStore interface {
 	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) (*database.RefreshToken, error)
+	RotateRefreshToken(ctx context.Context, params RotateRefreshTokenParams) (*RotateRefreshTokenResult, error)
 }
 
 type CreateRefreshTokenParams struct {
@@ -23,6 +27,7 @@ type CreateRefreshTokenParams struct {
 	TokenHash []byte
 	ExpiresAt time.Time
 	UserAgent string
+	CreatedIP *netip.Addr
 }
 
 func NewRefreshRepository(pool *pgxpool.Pool) *RefreshRepository {
@@ -42,7 +47,7 @@ func (repo *RefreshRepository) CreateRefreshToken(ctx context.Context, params Cr
 				Time:  params.ExpiresAt.UTC(),
 				Valid: true,
 			},
-			CreatedIp: nil,
+			CreatedIp: params.CreatedIP,
 			UserAgent: pgtype.Text{
 				String: params.UserAgent,
 				Valid:  params.UserAgent != "",
@@ -50,7 +55,7 @@ func (repo *RefreshRepository) CreateRefreshToken(ctx context.Context, params Cr
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("insert refresh token: %w", err)
+		return nil, fmt.Errorf("insert initial refresh token: %w", err)
 	}
 
 	return &token, nil
@@ -59,6 +64,150 @@ func (repo *RefreshRepository) CreateRefreshToken(ctx context.Context, params Cr
 type RotateRefreshTokenParams struct {
 	CurrentTokenHash []byte
 	NewTokenHash     []byte
-	ExpiresAt        time.Time
 	UserAgent        string
+	ClientIP         *netip.Addr
+}
+type RotateRefreshTokenResult struct {
+	RefreshToken database.RefreshToken
+	User         database.User
+}
+
+func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params RotateRefreshTokenParams) (*RotateRefreshTokenResult, error) {
+	const op = "rotate refresh token"
+	tx, err := repo.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: begin transaction: %w", op, err)
+	}
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	txQueries := repo.queries.WithTx(tx)
+	current, err := txQueries.GetRefreshTokenForUpdate(ctx, params.CurrentTokenHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrInvalidRefreshToken
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: lock current token: %w", op, err)
+	}
+
+	revokeFamily := func(reason string) error {
+		_, err := txQueries.RevokeRefreshTokenFamily(
+			ctx,
+			database.RevokeRefreshTokenFamilyParams{
+				FamilyID: current.FamilyID,
+				RevokedReason: pgtype.Text{
+					String: reason,
+					Valid:  true,
+				},
+			},
+		)
+		return err
+	}
+
+	if current.UsedAt.Valid {
+		err := revokeFamily("refresh_token_reuse")
+		if err != nil {
+			return nil, fmt.Errorf(
+				"%s: revoke token family (refresh_token_reuse): %w",
+				op,
+				err,
+			)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf(
+				"%s: commit token family revocation (refresh_token_reuse): %w",
+				op,
+				err,
+			)
+		}
+
+		return nil, ErrRefreshTokenReused
+	}
+
+	if current.RevokedAt.Valid {
+		return nil, ErrRefreshTokenRevoked
+	}
+
+	user, err := txQueries.GetUserByID(ctx, current.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err := revokeFamily("user_not_found")
+		if err != nil {
+			return nil, fmt.Errorf(
+				"%s: revoke token family (user_not_found): %w",
+				op,
+				err,
+			)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf(
+				"%s: commit token family revocation (user_not_found): %w",
+				op,
+				err,
+			)
+		}
+		return nil, ErrInvalidRefreshSession
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: get session user: %w", op, err)
+	}
+	if user.Status != "active" {
+		err := revokeFamily("user_inactive")
+		if err != nil {
+			return nil, fmt.Errorf(
+				"%s: revoke token family (user_inactive): %w",
+				op,
+				err,
+			)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf(
+				"%s: commit token family revocation (user_inactive): %w",
+				op,
+				err,
+			)
+		}
+		return nil, ErrInvalidRefreshSession
+	}
+
+	_, err = txQueries.MarkRefreshTokenUsed(
+		ctx,
+		database.MarkRefreshTokenUsedParams{
+			ID:         current.ID,
+			LastUsedIp: params.ClientIP,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRefreshTokenExpired
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: mark current token as used: %w", op, err)
+	}
+	rotated, err := txQueries.CreateRotatedRefreshToken(
+		ctx, database.CreateRotatedRefreshTokenParams{
+			FamilyID:  current.FamilyID,
+			UserID:    current.UserID,
+			TokenHash: params.NewTokenHash,
+			ParentID:  current.ID,
+			ExpiresAt: current.ExpiresAt,
+			CreatedIp: params.ClientIP,
+			UserAgent: pgtype.Text{
+				String: params.UserAgent,
+				Valid:  params.UserAgent != "",
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("%s: insert rotated token: %w", op, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("%s: commit transaction: %w", op, err)
+	}
+
+	return &RotateRefreshTokenResult{
+		RefreshToken: rotated,
+		User:         user,
+	}, nil
 }

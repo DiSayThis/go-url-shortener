@@ -10,22 +10,30 @@ import (
 )
 
 var (
-	// Ошибки регистрации.
+	// Регистрация.
 	ErrInvalidEmail       = errors.New("invalid email")
 	ErrInvalidDisplayName = errors.New("invalid display name")
 	ErrWeakPassword       = errors.New("weak password")
 	ErrEmailAlreadyExists = errors.New("email already exists")
 
-	// Одинаковая ошибка для неизвестного email и неправильного пароля.
-	// Это не позволяет клиенту выяснять, зарегистрирован ли конкретный email.
+	// Аутентификация по email/password.
+	// Одинаковая ошибка скрывает существование пользователя.
 	ErrInvalidCredentials = errors.New("invalid credentials")
 
+	// Пользователь.
 	ErrUserNotFound = errors.New("user not found")
 	ErrUserInactive = errors.New("user is not active")
 
+	// Password hashing.
 	ErrPasswordMismatch    = errors.New("password does not match")
 	ErrInvalidPasswordHash = errors.New("invalid password hash")
-	ErrAccessTokenConfig   = errors.New("invalid token config")
+
+	// Refresh token/session.
+	ErrInvalidRefreshToken   = errors.New("invalid refresh token")
+	ErrRefreshTokenExpired   = errors.New("refresh token expired")
+	ErrRefreshTokenRevoked   = errors.New("refresh token revoked")
+	ErrRefreshTokenReused    = errors.New("refresh token reuse detected")
+	ErrInvalidRefreshSession = errors.New("invalid refresh session")
 )
 
 func isEmailCollision(err error) bool {
@@ -95,9 +103,28 @@ func (handler *AuthHandler) handleError(w http.ResponseWriter, req *http.Request
 		)
 	case errors.Is(err, context.Canceled):
 		return
-	case errors.Is(err, ErrInvalidPasswordHash),
-		errors.Is(err, ErrAccessTokenConfig):
+	case errors.Is(err, ErrInvalidPasswordHash):
 		handler.writeInternalError(w, req, err)
+	case errors.Is(err, ErrInvalidRefreshToken),
+		errors.Is(err, ErrRefreshTokenExpired),
+		errors.Is(err, ErrRefreshTokenRevoked),
+		errors.Is(err, ErrRefreshTokenReused),
+		errors.Is(err, ErrInvalidRefreshSession):
+		handler.clearRefreshCookie(w)
+		if errors.Is(err, ErrRefreshTokenReused) {
+			handler.Logger.WarnContext(
+				req.Context(),
+				"refresh token reuse detected",
+				"method", req.Method,
+				"path", req.URL.Path,
+			)
+		}
+		response.JsonError(
+			w,
+			http.StatusUnauthorized,
+			"INVALID_SESSION",
+			"Refresh session is invalid",
+		)
 	default:
 		handler.writeInternalError(w, req, err)
 	}
