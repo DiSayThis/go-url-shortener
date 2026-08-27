@@ -75,7 +75,7 @@ func run(ctx context.Context, conf *configs.Config) error {
 	auth.NewAuthHandler(router, auth.AuthHandlerDeps{
 		Service:             authService,
 		Logger:              slog.Default(),
-		RefreshCookieSecure: true,
+		RefreshCookieSecure: conf.Auth.RefreshCookieSecure,
 	})
 	link.NewLinkHandler(router, link.LinkHandlerDeps{
 		Service: linkService,

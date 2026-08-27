@@ -3,6 +3,7 @@ package configs
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +27,13 @@ type CORSConfig struct {
 }
 
 type AuthConfig struct {
-	Secret     []byte
-	TTL        time.Duration
-	RefreshTTL time.Duration
-	Issuer     string
-	Audience   string
-	Leeway     time.Duration
+	Secret              []byte
+	TTL                 time.Duration
+	RefreshTTL          time.Duration
+	RefreshCookieSecure bool
+	Issuer              string
+	Audience            string
+	Leeway              time.Duration
 }
 
 type HttpConfig struct {
@@ -60,7 +62,10 @@ func LoadConfig() *Config {
 			"http://localhost:3000",
 		}
 	}
-
+	сookieSecure, err := strconv.ParseBool(os.Getenv("REFRESH_COOKIE_SECURE"))
+	if err != nil {
+		сookieSecure = false
+	}
 	return &Config{
 		Environment: environment,
 		Db: DbConfig{
@@ -71,12 +76,13 @@ func LoadConfig() *Config {
 			Host: os.Getenv("HOST"),
 		},
 		Auth: AuthConfig{
-			Secret:     []byte(os.Getenv("TOKEN")),
-			TTL:        15 * time.Minute,
-			RefreshTTL: 30 * 24 * time.Hour,
-			Issuer:     "go-url-shortener",
-			Audience:   "go-url-shortener",
-			Leeway:     30 * time.Second,
+			Secret:              []byte(os.Getenv("TOKEN")),
+			TTL:                 15 * time.Minute,
+			RefreshTTL:          30 * 24 * time.Hour,
+			RefreshCookieSecure: сookieSecure,
+			Issuer:              "go-url-shortener",
+			Audience:            "go-url-shortener",
+			Leeway:              30 * time.Second,
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: allowedOrigins,
