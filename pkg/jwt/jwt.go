@@ -41,7 +41,8 @@ func NewJWTAccessTokenService(
 	if len(config.Secret) < 32 ||
 		config.Issuer == "" ||
 		config.Audience == "" ||
-		config.TTL <= 0 {
+		config.TTL <= 0 ||
+		config.RefreshTTL <= 0 {
 		return nil, ErrAccessTokenConfig
 	}
 	return &JWTAccessTokenService{
