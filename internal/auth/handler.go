@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"go-api/pkg/jwt"
+	"go-api/pkg/middleware"
 	"go-api/pkg/request"
 	"go-api/pkg/response"
 )
@@ -37,10 +39,10 @@ func NewAuthHandler(router *http.ServeMux, deps AuthHandlerDeps) {
 	router.HandleFunc("POST /auth/login", handler.login)
 	router.HandleFunc("POST /auth/register", handler.register)
 	router.HandleFunc("POST /auth/refresh", handler.refresh)
-	router.HandleFunc("POST /auth/logout", handler.logout)
-	router.HandleFunc("POST /auth/sessions", handler.sessions)
-	router.HandleFunc("POST /auth/sessions/{familyID}", handler.sessionsByFamilyId)
-	router.HandleFunc("POST /auth/logout-all", handler.logoutAll)
+	router.Handle("POST /auth/logout", middleware.RequireAuth(handler.logout))
+	router.Handle("GET /auth/sessions", middleware.RequireAuth(handler.sessions))
+	router.Handle("DELETE /auth/sessions/{familyID}", middleware.RequireAuth(handler.sessionsByFamilyId))
+	router.Handle("DELETE /auth/sessions", middleware.RequireAuth(handler.logoutAll))
 }
 
 func preventAuthResponseCaching(w http.ResponseWriter) {
@@ -162,7 +164,24 @@ func (handler *AuthHandler) refresh(w http.ResponseWriter, req *http.Request) {
 }
 
 func (handler *AuthHandler) logout(w http.ResponseWriter, req *http.Request) {
+	preventAuthResponseCaching(w)
+	principal, ok := jwt.PrincipalFromContext(req.Context())
+	if !ok {
+		handler.handleError(w, req, nil)
+		return
+	}
+	err := handler.Service.Logout(
+		req.Context(),
+		LogoutInput{UserID: principal.UserID, FamilyID: principal.SessionID},
+	)
+	if err != nil {
+		handler.handleError(w, req, err)
+		return
+	}
+	handler.clearRefreshCookie(w)
+	response.JsonResponse(w, nil, http.StatusNoContent)
 }
+
 func (handler *AuthHandler) sessions(w http.ResponseWriter, req *http.Request) {
 }
 func (handler *AuthHandler) sessionsByFamilyId(w http.ResponseWriter, req *http.Request) {
