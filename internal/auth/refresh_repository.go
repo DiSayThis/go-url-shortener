@@ -30,6 +30,14 @@ type CreateRefreshTokenParams struct {
 	CreatedIP *netip.Addr
 }
 
+type refreshTokenRevokeReason string
+
+const (
+	refreshTokenRevokeReasonReuse        refreshTokenRevokeReason = "refresh_token_reuse"
+	refreshTokenRevokeReasonUserNotFound refreshTokenRevokeReason = "user_not_found"
+	refreshTokenRevokeReasonUserInactive refreshTokenRevokeReason = "user_inactive"
+)
+
 func NewRefreshRepository(pool *pgxpool.Pool) *RefreshRepository {
 	return &RefreshRepository{
 		pool:    pool,
@@ -91,13 +99,13 @@ func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params Ro
 		return nil, fmt.Errorf("%s: lock current token: %w", op, err)
 	}
 
-	revokeFamily := func(reason string) error {
+	revokeFamily := func(reason refreshTokenRevokeReason) error {
 		_, err := txQueries.RevokeRefreshTokenFamily(
 			ctx,
 			database.RevokeRefreshTokenFamilyParams{
 				FamilyID: current.FamilyID,
 				RevokedReason: pgtype.Text{
-					String: reason,
+					String: string(reason),
 					Valid:  true,
 				},
 			},
@@ -106,7 +114,7 @@ func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params Ro
 	}
 
 	if current.UsedAt.Valid {
-		err := revokeFamily("refresh_token_reuse")
+		err := revokeFamily(refreshTokenRevokeReasonReuse)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"%s: revoke token family (refresh_token_reuse): %w",
@@ -132,7 +140,7 @@ func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params Ro
 
 	user, err := txQueries.GetUserByID(ctx, current.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err := revokeFamily("user_not_found")
+		err := revokeFamily(refreshTokenRevokeReasonUserNotFound)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"%s: revoke token family (user_not_found): %w",
@@ -153,7 +161,7 @@ func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params Ro
 		return nil, fmt.Errorf("%s: get session user: %w", op, err)
 	}
 	if user.Status != "active" {
-		err := revokeFamily("user_inactive")
+		err := revokeFamily(refreshTokenRevokeReasonUserInactive)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"%s: revoke token family (user_inactive): %w",

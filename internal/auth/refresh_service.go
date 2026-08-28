@@ -77,10 +77,10 @@ func (service *Service) Refresh(
 	}
 
 	refreshExpiresAt := session.ExpiresAt.Time.UTC()
-	remainingRefreshTTL := time.Until(refreshExpiresAt)
+	remainingRefreshTTL := refreshExpiresAt.Sub(service.now().UTC())
 
-	if remainingRefreshTTL <= 0 {
-		return nil, ErrRefreshTokenExpired
+	if remainingRefreshTTL < time.Second {
+		remainingRefreshTTL = time.Second
 	}
 
 	return &RefreshResult{

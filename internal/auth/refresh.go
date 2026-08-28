@@ -16,7 +16,7 @@ type GeneratedRefreshToken struct {
 }
 
 func GenerateRefreshToken() (GeneratedRefreshToken, error) {
-	bytes := make([]byte, 32)
+	bytes := make([]byte, refreshTokenSize)
 
 	if _, err := rand.Read(bytes); err != nil {
 		return GeneratedRefreshToken{}, fmt.Errorf("generate refresh token: %w", err)
