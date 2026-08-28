@@ -30,11 +30,13 @@ var (
 	ErrInvalidPasswordHash = errors.New("invalid password hash")
 
 	// Refresh token/session.
-	ErrInvalidRefreshToken   = errors.New("invalid refresh token")
-	ErrRefreshTokenExpired   = errors.New("refresh token expired")
-	ErrRefreshTokenRevoked   = errors.New("refresh token revoked")
-	ErrRefreshTokenReused    = errors.New("refresh token reuse detected")
-	ErrInvalidRefreshSession = errors.New("invalid refresh session")
+	ErrInvalidRefreshToken            = errors.New("invalid refresh token")
+	ErrRefreshTokenExpired            = errors.New("refresh token expired")
+	ErrRefreshTokenRevoked            = errors.New("refresh token revoked")
+	ErrRefreshTokenReused             = errors.New("refresh token reuse detected")
+	ErrInvalidRefreshSession          = errors.New("invalid refresh session")
+	ErrInvalidSessionID               = errors.New("invalid session ID")
+	ErrSessionOperationNotImplemented = errors.New("session operation is not implemented")
 )
 
 func isEmailCollision(err error) bool {

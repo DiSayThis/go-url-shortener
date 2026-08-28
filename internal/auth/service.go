@@ -39,11 +39,35 @@ type LoginResult struct {
 	RefreshTokenExpiresAt time.Time
 	RefreshTokenTTL       time.Duration
 }
+type LogoutInput struct {
+	UserID   int64
+	FamilyID string
+}
+
+type RevokeSessionInput struct {
+	UserID   int64
+	FamilyID string
+}
+
+type Session struct {
+	FamilyID     string
+	UserAgent    string
+	CreatedIP    string
+	LastUsedIP   string
+	CreatedAt    time.Time
+	LastActiveAt time.Time
+	ExpiresAt    time.Time
+	IsCurrent    bool
+}
 
 type AuthService interface {
 	Register(ctx context.Context, input RegisterInput) (*database.User, error)
 	Login(ctx context.Context, input LoginInput) (*LoginResult, error)
 	Refresh(ctx context.Context, input RefreshInput) (*RefreshResult, error)
+	Logout(ctx context.Context, input LogoutInput) error
+	Sessions(ctx context.Context, userID int64, currentFamilyID string) ([]Session, error)
+	RevokeSession(ctx context.Context, input RevokeSessionInput) error
+	LogoutAll(ctx context.Context, userID int64) error
 }
 
 type AccessTokenIssuer interface {
@@ -105,4 +129,27 @@ func normalizeEmail(value string) (string, error) {
 	}
 
 	return email, nil
+}
+
+func (service *Service) Logout(ctx context.Context, input LogoutInput) error {
+	return ErrSessionOperationNotImplemented
+}
+
+func (service *Service) Sessions(
+	ctx context.Context,
+	userID int64,
+	currentFamilyID string,
+) ([]Session, error) {
+	return nil, ErrSessionOperationNotImplemented
+}
+
+func (service *Service) RevokeSession(
+	ctx context.Context,
+	input RevokeSessionInput,
+) error {
+	return ErrSessionOperationNotImplemented
+}
+
+func (service *Service) LogoutAll(ctx context.Context, userID int64) error {
+	return ErrSessionOperationNotImplemented
 }

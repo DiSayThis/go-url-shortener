@@ -36,3 +36,14 @@ type RefreshResponse struct {
 	TokenType   string    `json:"token_type"`
 	ExpiresAt   time.Time `json:"expires_at"`
 }
+
+type SessionResponse struct {
+	FamilyID     string    `json:"id"`
+	UserAgent    string    `json:"user_agent,omitempty"`
+	CreatedIP    string    `json:"created_ip,omitempty"`
+	LastUsedIP   string    `json:"last_used_ip,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastActiveAt time.Time `json:"last_active_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	IsCurrent    bool      `json:"is_current"`
+}

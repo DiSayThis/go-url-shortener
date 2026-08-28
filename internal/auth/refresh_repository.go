@@ -17,9 +17,22 @@ type RefreshRepository struct {
 	pool    *pgxpool.Pool
 	queries *database.Queries
 }
+type RevokeUserSessionParams struct {
+	UserID        int64
+	FamilyID      string
+	RevokedReason refreshTokenRevokeReason
+}
+
+type RevokeAllUserSessionsParams struct {
+	UserID        int64
+	RevokedReason refreshTokenRevokeReason
+}
 type RefreshStore interface {
 	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) (*database.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, params RotateRefreshTokenParams) (*RotateRefreshTokenResult, error)
+	ListActiveSessions(ctx context.Context, userID int64) ([]Session, error)
+	RevokeUserSession(ctx context.Context, params RevokeUserSessionParams) (int64, error)
+	RevokeAllUserSessions(ctx context.Context, params RevokeAllUserSessionsParams) (int64, error)
 }
 
 type CreateRefreshTokenParams struct {
@@ -36,6 +49,10 @@ const (
 	refreshTokenRevokeReasonReuse        refreshTokenRevokeReason = "refresh_token_reuse"
 	refreshTokenRevokeReasonUserNotFound refreshTokenRevokeReason = "user_not_found"
 	refreshTokenRevokeReasonUserInactive refreshTokenRevokeReason = "user_inactive"
+
+	refreshTokenRevokeReasonLogout        refreshTokenRevokeReason = "user_logout"
+	refreshTokenRevokeReasonSessionDelete refreshTokenRevokeReason = "user_revoked_session"
+	refreshTokenRevokeReasonLogoutAll     refreshTokenRevokeReason = "user_logout_all"
 )
 
 func NewRefreshRepository(pool *pgxpool.Pool) *RefreshRepository {
@@ -218,4 +235,25 @@ func (repo *RefreshRepository) RotateRefreshToken(ctx context.Context, params Ro
 		RefreshToken: rotated,
 		User:         user,
 	}, nil
+}
+
+func (repo *RefreshRepository) ListActiveSessions(
+	ctx context.Context,
+	userID int64,
+) ([]Session, error) {
+	return nil, ErrSessionOperationNotImplemented
+}
+
+func (repo *RefreshRepository) RevokeUserSession(
+	ctx context.Context,
+	params RevokeUserSessionParams,
+) (int64, error) {
+	return 0, ErrSessionOperationNotImplemented
+}
+
+func (repo *RefreshRepository) RevokeAllUserSessions(
+	ctx context.Context,
+	params RevokeAllUserSessionsParams,
+) (int64, error) {
+	return 0, ErrSessionOperationNotImplemented
 }
