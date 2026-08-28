@@ -22,10 +22,25 @@ type Argon2idPasswordHasher struct {
 	params Argon2idParams
 }
 
+const maxEncodedArgon2idHashLength = 1024
+const (
+	minArgon2Memory      uint32 = 8 * 1024
+	maxArgon2Memory      uint32 = 256 * 1024
+	minArgon2Iterations  uint32 = 1
+	maxArgon2Iterations  uint32 = 10
+	minArgon2Parallelism uint8  = 1
+	maxArgon2Parallelism uint8  = 16
+
+	minArgon2SaltLength = 16
+	maxArgon2SaltLength = 64
+	minArgon2HashLength = 16
+	maxArgon2HashLength = 64
+)
+
 func NewArgon2idPasswordHasher() *Argon2idPasswordHasher {
 	return &Argon2idPasswordHasher{
 		params: Argon2idParams{
-			Memory:      19 * 1024, // 19 MiB в KiB
+			Memory:      19 * 1024,
 			Iterations:  2,
 			Parallelism: 1,
 			SaltLength:  16,
@@ -43,7 +58,6 @@ func (hasher *Argon2idPasswordHasher) Hash(
 		return "", fmt.Errorf("generate password salt: %w", err)
 	}
 
-	// Вычисляем Argon2id-хеш.
 	hash := argon2.IDKey(
 		[]byte(password),
 		salt,
@@ -53,11 +67,9 @@ func (hasher *Argon2idPasswordHasher) Hash(
 		hasher.params.KeyLength,
 	)
 
-	// Сохраняем бинарные salt и hash как Base64.
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
 
-	// В строке сохраняются также алгоритм и его параметры.
 	encoded := fmt.Sprintf(
 		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version,
@@ -80,8 +92,6 @@ func (hasher *Argon2idPasswordHasher) Compare(
 		return err
 	}
 
-	// Вычисляем хеш введённого пароля с параметрами и salt,
-	// которые хранятся в encodedHash.
 	actualHash := argon2.IDKey(
 		[]byte(password),
 		decoded.salt,
@@ -91,8 +101,6 @@ func (hasher *Argon2idPasswordHasher) Compare(
 		uint32(len(decoded.hash)),
 	)
 
-	// Нельзя сравнивать security-sensitive значения обычным string == string.
-	// ConstantTimeCompare уменьшает утечку информации через время выполнения.
 	if subtle.ConstantTimeCompare(
 		actualHash,
 		decoded.hash,
@@ -114,6 +122,11 @@ type decodedArgon2idHash struct {
 func decodeArgon2idHash(
 	encodedHash string,
 ) (decodedArgon2idHash, error) {
+	if len(encodedHash) == 0 ||
+		len(encodedHash) > maxEncodedArgon2idHashLength {
+		return decodedArgon2idHash{}, ErrInvalidPasswordHash
+	}
+
 	parts := strings.Split(encodedHash, "$")
 
 	// Строка начинается с $, поэтому parts[0] будет пустым.
@@ -163,6 +176,15 @@ func decodeArgon2idHash(
 	); err != nil {
 		return decodedArgon2idHash{}, ErrInvalidPasswordHash
 	}
+	if memory < minArgon2Memory ||
+		memory > maxArgon2Memory ||
+		memory < 8*uint32(parallelism) ||
+		iterations < minArgon2Iterations ||
+		iterations > maxArgon2Iterations ||
+		parallelism < minArgon2Parallelism ||
+		parallelism > maxArgon2Parallelism {
+		return decodedArgon2idHash{}, ErrInvalidPasswordHash
+	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
@@ -173,8 +195,10 @@ func decodeArgon2idHash(
 	if err != nil {
 		return decodedArgon2idHash{}, ErrInvalidPasswordHash
 	}
-
-	if len(salt) == 0 || len(hash) == 0 {
+	if len(salt) < minArgon2SaltLength ||
+		len(salt) > maxArgon2SaltLength ||
+		len(hash) < minArgon2HashLength ||
+		len(hash) > maxArgon2HashLength {
 		return decodedArgon2idHash{}, ErrInvalidPasswordHash
 	}
 
