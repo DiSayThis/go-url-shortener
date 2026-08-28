@@ -2,7 +2,7 @@
 CREATE TABLE users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     public_id UUID NOT NULL DEFAULT uuidv7(),
-    email TEXT NOT NULL,
+    email VARCHAR(254) NOT NULL,
     display_name VARCHAR(100) NOT NULL,
     password_hash TEXT,
     role VARCHAR(32) NOT NULL DEFAULT 'user',
@@ -40,13 +40,13 @@ CREATE TABLE refresh_tokens (
     created_ip INET,
     last_used_ip INET,
     user_agent TEXT,
-    CONSTRAINT fk_refresh_tokens_parent FOREIGN KEY (parent_id)
-        REFERENCES refresh_tokens(id)
-        ON DELETE SET NULL,
-    CONSTRAINT uq_refresh_tokens_hash UNIQUE (token_hash),
-    CONSTRAINT uq_refresh_tokens_parent UNIQUE (parent_id),
-    CONSTRAINT chk_refresh_tokens_hash_length CHECK (octet_length(token_hash) = 32),
-    CONSTRAINT chk_refresh_tokens_expiration CHECK (expires_at > created_at)
+    CONSTRAINT fk_refresh_tokens_parent FOREIGN KEY (parent_id) REFERENCES refresh_tokens(id) ON DELETE
+    SET
+        NULL,
+        CONSTRAINT uq_refresh_tokens_hash UNIQUE (token_hash),
+        CONSTRAINT uq_refresh_tokens_parent UNIQUE (parent_id),
+        CONSTRAINT chk_refresh_tokens_hash_length CHECK (octet_length(token_hash) = 32),
+        CONSTRAINT chk_refresh_tokens_expiration CHECK (expires_at > created_at)
 );
 
 CREATE INDEX idx_refresh_tokens_user_active ON refresh_tokens (user_id, created_at DESC)

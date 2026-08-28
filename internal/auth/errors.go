@@ -15,6 +15,7 @@ var (
 	ErrInvalidDisplayName = errors.New("invalid display name")
 	ErrWeakPassword       = errors.New("weak password")
 	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrPasswordTooLong    = errors.New("password is too long")
 
 	// Аутентификация по email/password.
 	// Одинаковая ошибка скрывает существование пользователя.
@@ -105,6 +106,13 @@ func (handler *AuthHandler) handleError(w http.ResponseWriter, req *http.Request
 		return
 	case errors.Is(err, ErrInvalidPasswordHash):
 		handler.writeInternalError(w, req, err)
+	case errors.Is(err, ErrPasswordTooLong):
+		response.JsonError(
+			w,
+			http.StatusBadRequest,
+			"PASSWORD_TOO_LONG",
+			"Password is too long",
+		)
 	case errors.Is(err, ErrInvalidRefreshToken),
 		errors.Is(err, ErrRefreshTokenExpired),
 		errors.Is(err, ErrRefreshTokenRevoked),

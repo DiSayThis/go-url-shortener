@@ -7,7 +7,7 @@ import (
 	"go-api/internal/database"
 	"go-api/pkg/jwt"
 	"strings"
-	"time"
+	"unicode/utf8"
 )
 
 func (service *Service) Login(
@@ -26,7 +26,7 @@ func (service *Service) Login(
 	if err != nil {
 		return nil, err
 	}
-	refreshExpiresAt := time.Now().UTC().Add(service.refreshTTL)
+	refreshExpiresAt := service.now().UTC().Add(service.refreshTTL)
 
 	session, err := service.refreshRepository.CreateRefreshToken(
 		ctx,
@@ -73,11 +73,16 @@ func (service *Service) Register(
 	}
 
 	displayName := strings.TrimSpace(input.DisplayName)
-	if displayName == "" {
+	if displayName == "" ||
+		utf8.RuneCountInString(displayName) > maxDisplayNameLength {
 		return nil, ErrInvalidDisplayName
 	}
 	if len(input.Password) < minPasswordLength {
 		return nil, ErrWeakPassword
+	}
+
+	if len(input.Password) > maxPasswordLength {
+		return nil, ErrPasswordTooLong
 	}
 
 	passwordHash, err := service.passwords.Hash(input.Password)
@@ -103,7 +108,7 @@ func (service *Service) Authenticate(
 	password string,
 ) (*database.User, error) {
 	email, err := normalizeEmail(rawEmail)
-	if err != nil || password == "" {
+	if err != nil || password == "" || len(password) > maxPasswordLength {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -122,8 +127,15 @@ func (service *Service) Authenticate(
 		return nil, ErrInvalidCredentials
 	}
 
-	if err := service.passwords.Compare(password, user.PasswordHash.String); err != nil {
-		return nil, ErrInvalidCredentials
+	if err := service.passwords.Compare(
+		password,
+		user.PasswordHash.String,
+	); err != nil {
+		if errors.Is(err, ErrPasswordMismatch) {
+			return nil, ErrInvalidCredentials
+		}
+
+		return nil, fmt.Errorf("verify password hash: %w", err)
 	}
 
 	if user.Status != "active" {

@@ -11,8 +11,6 @@ import (
 	"go-api/pkg/jwt"
 )
 
-const minPasswordLength = 8
-
 // PasswordHasher скрывает конкретный алгоритм от service.
 // Следующей реализацией этого интерфейса будет Argon2idPasswordHasher.
 type PasswordHasher interface {
@@ -58,6 +56,7 @@ type ServiceDeps struct {
 	Passwords         PasswordHasher
 	AccessTokens      AccessTokenIssuer
 	RefreshTTL        time.Duration
+	Clock             Clock
 }
 
 type Service struct {
@@ -66,20 +65,40 @@ type Service struct {
 	passwords         PasswordHasher
 	accessTokens      AccessTokenIssuer
 	refreshTTL        time.Duration
+	now               Clock
 }
 
+type Clock func() time.Time
+
+const (
+	minPasswordLength    = 8
+	maxPasswordLength    = 1024 // байты
+	maxEmailLength       = 254  // байты
+	maxDisplayNameLength = 100  // Unicode-символы
+)
+
 func NewService(deps ServiceDeps) *Service {
+	now := deps.Clock
+	if now == nil {
+		now = time.Now
+	}
+
 	return &Service{
 		userRepository:    deps.UserRepository,
 		refreshRepository: deps.RefreshRepository,
 		passwords:         deps.Passwords,
 		accessTokens:      deps.AccessTokens,
 		refreshTTL:        deps.RefreshTTL,
+		now:               now,
 	}
 }
 
 func normalizeEmail(value string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(value))
+	if email == "" || len(email) > maxEmailLength {
+		return "", ErrInvalidEmail
+	}
+
 	address, err := mail.ParseAddress(email)
 	if err != nil || address.Address != email {
 		return "", ErrInvalidEmail

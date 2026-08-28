@@ -16,8 +16,8 @@ type UserResponse struct {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
+	Email    string `json:"email" validate:"required,email,max=254"`
+	Password string `json:"password" validate:"required,min=8,max=1024"`
 }
 
 type RegisterResponse struct {
@@ -26,9 +26,9 @@ type RegisterResponse struct {
 }
 
 type RegisterRequest struct {
-	Name     string `json:"name" validate:"required"`
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
+	Name     string `json:"name" validate:"required,max=100"`
+	Email    string `json:"email" validate:"required,email,max=254"`
+	Password string `json:"password" validate:"required,min=8,max=1024"`
 }
 
 type RefreshResponse struct {

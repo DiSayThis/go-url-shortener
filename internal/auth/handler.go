@@ -50,6 +50,7 @@ func preventAuthResponseCaching(w http.ResponseWriter) {
 
 func (handler *AuthHandler) login(w http.ResponseWriter, req *http.Request) {
 	preventAuthResponseCaching(w)
+	req.Body = http.MaxBytesReader(w, req.Body, 64<<10)
 	body, err := request.HandleBody[LoginRequest](w, req)
 	if err != nil {
 		return
