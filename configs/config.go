@@ -64,7 +64,7 @@ func LoadConfig() *Config {
 	}
 	сookieSecure, err := strconv.ParseBool(os.Getenv("REFRESH_COOKIE_SECURE"))
 	if err != nil {
-		сookieSecure = false
+		сookieSecure = true
 	}
 	return &Config{
 		Environment: environment,
