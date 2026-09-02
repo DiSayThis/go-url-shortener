@@ -12,21 +12,22 @@ import (
 )
 
 const createLink = `-- name: CreateLink :one
-INSERT INTO links (
+INSERT INTO
+  links (
     user_id,
     url,
     hash,
     title,
     expires_at
-)
-VALUES (
+  )
+VALUES
+  (
     $1,
     $2,
     $3,
     $4,
     $5
-)
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  ) RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type CreateLinkParams struct {
@@ -63,12 +64,18 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, e
 }
 
 const getLinkByHash = `-- name: GetLinkByHash :one
-SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
-FROM links
-WHERE hash = $1
+SELECT
+  id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM
+  links
+WHERE
+  hash = $1
   AND deleted_at IS NULL
   AND is_active = true
-  AND (expires_at IS NULL OR expires_at > now())
+  AND (
+    expires_at IS NULL
+    OR expires_at > now()
+  )
 `
 
 func (q *Queries) GetLinkByHash(ctx context.Context, hash string) (Link, error) {
@@ -91,9 +98,12 @@ func (q *Queries) GetLinkByHash(ctx context.Context, hash string) (Link, error) 
 }
 
 const getLinkByID = `-- name: GetLinkByID :one
-SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
-FROM links
-WHERE id = $1
+SELECT
+  id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM
+  links
+WHERE
+  id = $1
   AND user_id = $2
   AND deleted_at IS NULL
 `
@@ -123,9 +133,12 @@ func (q *Queries) GetLinkByID(ctx context.Context, arg GetLinkByIDParams) (Link,
 }
 
 const getLinkByPublicID = `-- name: GetLinkByPublicID :one
-SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
-FROM links
-WHERE public_id = $1
+SELECT
+  id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM
+  links
+WHERE
+  public_id = $1
   AND user_id = $2
   AND deleted_at IS NULL
 `
@@ -155,10 +168,11 @@ func (q *Queries) GetLinkByPublicID(ctx context.Context, arg GetLinkByPublicIDPa
 }
 
 const hardDeleteLink = `-- name: HardDeleteLink :one
-DELETE FROM links
-WHERE public_id = $1
-  AND user_id = $2
-RETURNING id
+DELETE FROM
+  links
+WHERE
+  public_id = $1
+  AND user_id = $2 RETURNING id
 `
 
 type HardDeleteLinkParams struct {
@@ -174,13 +188,18 @@ func (q *Queries) HardDeleteLink(ctx context.Context, arg HardDeleteLinkParams) 
 }
 
 const listLinksByUser = `-- name: ListLinksByUser :many
-SELECT id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
-FROM links
-WHERE user_id = $1
+SELECT
+  id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+FROM
+  links
+WHERE
+  user_id = $1
   AND deleted_at IS NULL
-ORDER BY created_at DESC, id DESC
-LIMIT $3::integer
-OFFSET $2::integer
+ORDER BY
+  created_at DESC,
+  id DESC
+LIMIT
+  $3 :: integer OFFSET $2 :: integer
 `
 
 type ListLinksByUserParams struct {
@@ -222,13 +241,15 @@ func (q *Queries) ListLinksByUser(ctx context.Context, arg ListLinksByUserParams
 }
 
 const restoreLink = `-- name: RestoreLink :one
-UPDATE links
-SET deleted_at = NULL,
-    updated_at = now()
-WHERE public_id = $1
+UPDATE
+  links
+SET
+  deleted_at = NULL,
+  updated_at = now()
+WHERE
+  public_id = $1
   AND user_id = $2
-  AND deleted_at IS NOT NULL
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  AND deleted_at IS NOT NULL RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type RestoreLinkParams struct {
@@ -256,13 +277,15 @@ func (q *Queries) RestoreLink(ctx context.Context, arg RestoreLinkParams) (Link,
 }
 
 const setLinkActive = `-- name: SetLinkActive :one
-UPDATE links
-SET is_active = $1,
-    updated_at = now()
-WHERE public_id = $2
+UPDATE
+  links
+SET
+  is_active = $1,
+  updated_at = now()
+WHERE
+  public_id = $2
   AND user_id = $3
-  AND deleted_at IS NULL
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  AND deleted_at IS NULL RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type SetLinkActiveParams struct {
@@ -291,13 +314,15 @@ func (q *Queries) SetLinkActive(ctx context.Context, arg SetLinkActiveParams) (L
 }
 
 const softDeleteLink = `-- name: SoftDeleteLink :one
-UPDATE links
-SET deleted_at = now(),
-    updated_at = now()
-WHERE public_id = $1
+UPDATE
+  links
+SET
+  deleted_at = now(),
+  updated_at = now()
+WHERE
+  public_id = $1
   AND user_id = $2
-  AND deleted_at IS NULL
-RETURNING id
+  AND deleted_at IS NULL RETURNING id
 `
 
 type SoftDeleteLinkParams struct {
@@ -313,14 +338,16 @@ func (q *Queries) SoftDeleteLink(ctx context.Context, arg SoftDeleteLinkParams) 
 }
 
 const updateLinkMetadata = `-- name: UpdateLinkMetadata :one
-UPDATE links
-SET title = $1,
-    expires_at = $2,
-    updated_at = now()
-WHERE public_id = $3
+UPDATE
+  links
+SET
+  title = $1,
+  expires_at = $2,
+  updated_at = now()
+WHERE
+  public_id = $3
   AND user_id = $4
-  AND deleted_at IS NULL
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  AND deleted_at IS NULL RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type UpdateLinkMetadataParams struct {
@@ -355,13 +382,15 @@ func (q *Queries) UpdateLinkMetadata(ctx context.Context, arg UpdateLinkMetadata
 }
 
 const updateLinkURL = `-- name: UpdateLinkURL :one
-UPDATE links
-SET url = $1,
-    updated_at = now()
-WHERE public_id = $2
+UPDATE
+  links
+SET
+  url = $1,
+  updated_at = now()
+WHERE
+  public_id = $2
   AND user_id = $3
-  AND deleted_at IS NULL
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  AND deleted_at IS NULL RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type UpdateLinkURLParams struct {
@@ -390,14 +419,16 @@ func (q *Queries) UpdateLinkURL(ctx context.Context, arg UpdateLinkURLParams) (L
 }
 
 const updateLinkUrlAndHash = `-- name: UpdateLinkUrlAndHash :one
-UPDATE links
-SET url = $1,
-    hash = $2,
-    updated_at = now()
-WHERE public_id = $3
+UPDATE
+  links
+SET
+  url = $1,
+  hash = $2,
+  updated_at = now()
+WHERE
+  public_id = $3
   AND user_id = $4
-  AND deleted_at IS NULL
-RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
+  AND deleted_at IS NULL RETURNING id, public_id, user_id, url, hash, title, is_active, expires_at, created_at, updated_at, deleted_at
 `
 
 type UpdateLinkUrlAndHashParams struct {

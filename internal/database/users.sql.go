@@ -12,17 +12,14 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (
-    email,
-    display_name,
-    password_hash
-)
-VALUES (
+INSERT INTO
+  users (email, display_name, password_hash)
+VALUES
+  (
     $1,
     $2,
     $3
-)
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+  ) RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
@@ -52,17 +49,18 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const createUserWithoutPassword = `-- name: CreateUserWithoutPassword :one
-INSERT INTO users (
+INSERT INTO
+  users (
     email,
     display_name,
     email_verified_at
-)
-VALUES (
+  )
+VALUES
+  (
     $1,
     $2,
     $3
-)
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+  ) RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type CreateUserWithoutPasswordParams struct {
@@ -92,9 +90,12 @@ func (q *Queries) CreateUserWithoutPassword(ctx context.Context, arg CreateUserW
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
-FROM users
-WHERE email = $1
+SELECT
+  id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+FROM
+  users
+WHERE
+  email = $1
   AND deleted_at IS NULL
 `
 
@@ -119,9 +120,12 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
-FROM users
-WHERE id = $1
+SELECT
+  id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+FROM
+  users
+WHERE
+  id = $1
   AND deleted_at IS NULL
 `
 
@@ -146,9 +150,12 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 }
 
 const getUserByPublicID = `-- name: GetUserByPublicID :one
-SELECT id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
-FROM users
-WHERE public_id = $1
+SELECT
+  id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+FROM
+  users
+WHERE
+  public_id = $1
   AND deleted_at IS NULL
 `
 
@@ -173,12 +180,14 @@ func (q *Queries) GetUserByPublicID(ctx context.Context, publicID pgtype.UUID) (
 }
 
 const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
-UPDATE users
-SET email_verified_at = COALESCE(email_verified_at, now()),
-    updated_at = now()
-WHERE id = $1
-  AND deleted_at IS NULL
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+UPDATE
+  users
+SET
+  email_verified_at = COALESCE(email_verified_at, now()),
+  updated_at = now()
+WHERE
+  id = $1
+  AND deleted_at IS NULL RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) MarkUserEmailVerified(ctx context.Context, id int64) (User, error) {
@@ -202,13 +211,15 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, id int64) (User, er
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :one
-UPDATE users
-SET status = 'blocked',
-    deleted_at = now(),
-    updated_at = now()
-WHERE id = $1
-  AND deleted_at IS NULL
-RETURNING id
+UPDATE
+  users
+SET
+  status = 'blocked',
+  deleted_at = now(),
+  updated_at = now()
+WHERE
+  id = $1
+  AND deleted_at IS NULL RETURNING id
 `
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, id int64) (int64, error) {
@@ -219,10 +230,13 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int64) (int64, error) {
 }
 
 const updateUserLastLogin = `-- name: UpdateUserLastLogin :exec
-UPDATE users
-SET last_login_at = now(),
-    updated_at = now()
-WHERE id = $1
+UPDATE
+  users
+SET
+  last_login_at = now(),
+  updated_at = now()
+WHERE
+  id = $1
   AND deleted_at IS NULL
 `
 
@@ -232,12 +246,14 @@ func (q *Queries) UpdateUserLastLogin(ctx context.Context, id int64) error {
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :one
-UPDATE users
-SET password_hash = $1,
-    updated_at = now()
-WHERE id = $2
-  AND deleted_at IS NULL
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+UPDATE
+  users
+SET
+  password_hash = $1,
+  updated_at = now()
+WHERE
+  id = $2
+  AND deleted_at IS NULL RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type UpdateUserPasswordParams struct {
@@ -266,12 +282,14 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 }
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
-UPDATE users
-SET display_name = $1,
-    updated_at = now()
-WHERE id = $2
-  AND deleted_at IS NULL
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+UPDATE
+  users
+SET
+  display_name = $1,
+  updated_at = now()
+WHERE
+  id = $2
+  AND deleted_at IS NULL RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type UpdateUserProfileParams struct {
@@ -300,12 +318,14 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users
-SET role = $1,
-    updated_at = now()
-WHERE public_id = $2
-  AND deleted_at IS NULL
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+UPDATE
+  users
+SET
+  role = $1,
+  updated_at = now()
+WHERE
+  public_id = $2
+  AND deleted_at IS NULL RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type UpdateUserRoleParams struct {
@@ -334,12 +354,14 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 }
 
 const updateUserStatus = `-- name: UpdateUserStatus :one
-UPDATE users
-SET status = $1,
-    updated_at = now()
-WHERE public_id = $2
-  AND deleted_at IS NULL
-RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+UPDATE
+  users
+SET
+  status = $1,
+  updated_at = now()
+WHERE
+  public_id = $2
+  AND deleted_at IS NULL RETURNING id, public_id, email, display_name, password_hash, role, status, email_verified_at, last_login_at, created_at, updated_at, deleted_at
 `
 
 type UpdateUserStatusParams struct {
